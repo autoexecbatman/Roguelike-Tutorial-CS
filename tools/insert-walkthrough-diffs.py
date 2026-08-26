@@ -34,6 +34,7 @@ PARTS = [
     "part-08-items-and-inventory",
     "part-09-ranged-scrolls-and-targeting",
     "part-10-saving-and-loading",
+    "part-11-levelling-up",
 ]
 
 # Marks a block this tool generated, so a re-run can strip it without touching prose.

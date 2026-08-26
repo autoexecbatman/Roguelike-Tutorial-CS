@@ -38,6 +38,7 @@ PARTS = [
     "part-08-items-and-inventory",
     "part-09-ranged-scrolls-and-targeting",
     "part-10-saving-and-loading",
+    "part-11-levelling-up",
 ]
 
 # One line of this changes per part, and each walkthrough gives that line in its own step.

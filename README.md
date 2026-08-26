@@ -64,7 +64,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | [8. Items and inventory](docs/part-08-items-and-inventory.md) | Modal input, components for items, and a pack with a limit | [code](parts/part-08-items-and-inventory/) |
 | [9. Ranged scrolls and targeting](docs/part-09-ranged-scrolls-and-targeting.md) | A mode that remembers where it came from | [code](parts/part-09-ranged-scrolls-and-targeting/) |
 | [10. Save and load](docs/part-10-saving-and-loading.md) | What the game is, as opposed to how you are looking at it | [code](parts/part-10-saving-and-loading/) |
-| 11. Levelling up | Experience and character progression | planned |
+| [11. Levelling up](docs/part-11-levelling-up.md) | Earning a level and choosing what it buys | [code](parts/part-11-levelling-up/) |
 | 12. Deeper levels | Monsters and loot that scale with depth | planned |
 | 13. Equipment | Weapons and armour that change your numbers | planned |
 
