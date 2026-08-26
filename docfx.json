@@ -4,7 +4,7 @@
       "src": [
         {
           "files": [
-            "parts/part-01-drawing-and-moving/RogueTutorial/RogueTutorial.csproj"
+            "parts/part-02-entities-and-the-map/RogueTutorial/RogueTutorial.csproj"
           ]
         }
       ],

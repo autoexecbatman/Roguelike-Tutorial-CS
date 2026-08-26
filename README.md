@@ -55,7 +55,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | Part | What you build | Code |
 |---|---|---|
 | [1. Drawing and moving the player](docs/part-01-drawing-and-moving.md) | A window, an `@`, and eight-way movement | [code](parts/part-01-drawing-and-moving/) |
-| 2. The entity class and the map | Something other than the player to draw | planned |
+| [2. The entity class and the map](docs/part-02-entities-and-the-map.md) | Walls that stop you, a second character, and a testable picture | [code](parts/part-02-entities-and-the-map/) |
 | 3. Dungeon generation | Rooms joined by corridors | planned |
 | 4. Field of view | You only see what the `@` can see | planned |
 | 5. Placing monsters | Things that occupy space | planned |
@@ -73,9 +73,10 @@ unfiltered root run opens one window per part and waits several seconds on each.
 Every part is a **complete, runnable snapshot** in its own folder:
 
 ```
-parts/part-01-drawing-and-moving/    the whole project as it stands at the end of Part 1
-parts/part-02-entities-and-the-map/  the whole project as it stands at the end of Part 2
-docs/part-01-drawing-and-moving.md   the walkthrough for that part
+parts/part-01-drawing-and-moving/     the whole project as it stands at the end of Part 1
+parts/part-02-entities-and-the-map/   the whole project as it stands at the end of Part 2
+docs/part-01-drawing-and-moving.md    the walkthrough for that part
+docs/part-02-entities-and-the-map.md  and for that one
 ```
 
 So you can open the part you are on and run it, without git commands and without seeing code

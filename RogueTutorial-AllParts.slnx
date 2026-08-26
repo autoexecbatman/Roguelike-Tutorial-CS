@@ -4,4 +4,8 @@
     <Project Path="parts/part-01-drawing-and-moving/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-01-drawing-and-moving/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-02-entities-and-the-map/">
+    <Project Path="parts/part-02-entities-and-the-map/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-02-entities-and-the-map/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>
