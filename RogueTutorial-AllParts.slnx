@@ -24,4 +24,8 @@
     <Project Path="parts/part-06-combat/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-06-combat/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-07-log-and-health-bar/">
+    <Project Path="parts/part-07-log-and-health-bar/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-07-log-and-health-bar/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>

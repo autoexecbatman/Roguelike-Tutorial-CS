@@ -34,6 +34,7 @@ PARTS = [
     "part-04-field-of-view",
     "part-05-placing-monsters",
     "part-06-combat",
+    "part-07-log-and-health-bar",
 ]
 
 # One line of this changes per part, and each walkthrough gives that line in its own step.
