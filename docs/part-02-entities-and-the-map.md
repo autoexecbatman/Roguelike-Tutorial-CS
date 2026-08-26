@@ -289,582 +289,624 @@ Eight new files in `RogueTutorial/`, in this order - each depends only on the on
 **Each block below is the complete file.** Create the file and paste the whole block; do not
 merge pieces into anything you already have.
 
-Write the tests as you go, red first. [Writing tests](writing-tests.md) covers how.
+### The test files
 
-### `RogueTutorial/Tile.cs`
+**Each block below is the complete file.** Create it in `RogueTutorial.Tests/` and paste the
+whole thing.
 
-One cell's appearance and its two rules.
+Write each test before the code it covers where you can, and watch it fail first -
+[Writing tests](writing-tests.md) explains why that step matters and what a real failure looks
+like. `GridBoundsTests`, `MovementKeysTests`, `UntestabilityProof` and `GameStartsEndToEndTests`
+carry over from Part 1 unchanged. `PlayerMoverTests` is deleted in Step 2.
 
-```csharp
-/*
- * One cell of the dungeon: what it looks like and what it permits.
- *
- * Usage - tiles are values, so construct them directly or take one of the standard kinds:
- *
- *     Tile wall = TileTypes.Wall;                        // '#', blocks movement and sight
- *     Tile floor = TileTypes.Floor;                      // '.', walkable and see-through
- *     Tile custom = new Tile('~', Color.Cyan, true, true);  // glyph, colour, walkable, transparent
- *
- * Being a readonly struct, a tile cannot be modified after construction; replace it in the
- * map instead. That is what stops one shared wall object from being edited by accident.
- */
+### [`RogueTutorial.Tests/GameMapTests.cs`](../parts/part-02-entities-and-the-map/RogueTutorial.Tests/GameMapTests.cs)
 
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal readonly struct Tile
-{
-    // The character drawn for this cell.
-    public char Glyph { get; }
-
-    // The colour that character is drawn in.
-    public Color Foreground { get; }
-
-    // True when a creature may stand here.
-    public bool IsWalkable { get; }
-
-    // True when sight passes through. Unused until field of view in Part 4.
-    public bool IsTransparent { get; }
-
-    /// <summary>
-    /// Records the appearance and the two rules a tile carries. Every argument is explicit;
-    /// there is no default kind of tile, because "the usual one" differs per caller.
-    /// </summary>
-    public Tile(char glyph, Color foreground, bool isWalkable, bool isTransparent)
-    {
-        Glyph = glyph;
-        Foreground = foreground;
-        IsWalkable = isWalkable;
-        IsTransparent = isTransparent;
-    }
-}
-```
-
-### `RogueTutorial/TileTypes.cs`
-
-The standard kinds, `Floor` and `Wall`.
+The map's fill, its bounds, and the split between what throws off the map and what answers false.
 
 ```csharp
 /*
- * The standard tile kinds, named once so a glyph or colour change happens in one place.
+ * Unit tests for the dungeon floor. Expected values come from the map specification: every
+ * cell starts as floor, reading or writing off the map is a caller error, and asking whether
+ * you may stand off the map is an ordinary question with the answer "no".
  *
- * Usage:
- *
- *     Tile floor = TileTypes.Floor;   // '.', dark grey, walkable, transparent
- *     Tile wall = TileTypes.Wall;     // '#', light grey, blocks movement and sight
- *
- * Add a kind here rather than constructing a Tile inline at a call site; a literal '#'
- * scattered through map generation is the thing that makes a re-theme painful later.
- */
-
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal static class TileTypes
-{
-    /// <summary>Open ground: a creature may stand on it and see across it.</summary>
-    public static Tile Floor { get; } = new Tile('.', new Color(80, 80, 80), true, true);
-
-    /// <summary>Solid rock: blocks both movement and, from Part 4, sight.</summary>
-    public static Tile Wall { get; } = new Tile('#', new Color(160, 160, 160), false, false);
-}
-```
-
-### `RogueTutorial/GameMap.cs`
-
-Tiles over the `GridBounds` you already have.
-
-```csharp
-/*
- * The dungeon floor: a rectangle of tiles, and the questions the game asks about it.
- *
- * Usage - build one, fill it, then ask what a position permits:
- *
- *     GameMap map = new GameMap(80, 25);          // every cell starts as floor
- *     map.SetTile(new Point(5, 5), TileTypes.Wall);
- *     bool blocked = map.IsWalkable(new Point(5, 5));   // -> false
- *     bool offMap = map.IsWalkable(new Point(-1, 0));   // -> false, outside is never walkable
- *     Tile tile = map.GetTile(new Point(0, 0));         // -> TileTypes.Floor
- *
- * Refuses a position outside the map in GetTile and SetTile, because reading or writing off
- * the map is a caller error. IsWalkable answers false instead, since asking whether you may
- * step off the edge is an ordinary question.
+ * Usage:  dotnet test --filter FullyQualifiedName~GameMapTests
  */
 
 using System;
+using RogueTutorial;
 using SadRogue.Primitives;
+using Xunit;
 
-namespace RogueTutorial;
-
-internal sealed class GameMap
+public sealed class GameMapTests
 {
-    // The rectangle of legal positions; reused from Part 1.
-    private readonly GridBounds _bounds;
-
-    // Tiles in row-major order, indexed as [y * Width + x].
-    private readonly Tile[] _tiles;
-
-    /// <summary>Number of cells across.</summary>
-    public int Width => _bounds.Width;
-
-    /// <summary>Number of cells down.</summary>
-    public int Height => _bounds.Height;
-
-    /// <summary>
-    /// Creates a map of the given size with every cell set to floor. Throws
-    /// ArgumentOutOfRangeException when either dimension is below one.
-    /// </summary>
-    public GameMap(int width, int height)
+    [Fact]
+    public void ANewMapIsAllFloor()
     {
-        _bounds = new GridBounds(width, height);
+        GameMap map = new GameMap(4, 3);
 
-        _tiles = new Tile[width * height];
-
-        // A map of default-constructed tiles would be unwalkable and invisible, so fill it.
-        for (int index = 0; index < _tiles.Length; index++)
-        {
-            _tiles[index] = TileTypes.Floor;
-        }
-    }
-
-    /// <summary>True when the position is a cell of this map.</summary>
-    public bool IsInBounds(Point position)
-    {
-        return _bounds.Contains(position);
-    }
-
-    /// <summary>
-    /// Returns the tile at the position. Throws ArgumentOutOfRangeException when the position
-    /// is off the map; use IsInBounds first if that is a possibility.
-    /// </summary>
-    public Tile GetTile(Point position)
-    {
-        RejectPositionOffTheMap(position, nameof(position));
-
-        return _tiles[IndexOf(position)];
-    }
-
-    /// <summary>
-    /// Replaces the tile at the position. Throws ArgumentOutOfRangeException when the position
-    /// is off the map, because writing outside the map is always a mistake.
-    /// </summary>
-    public void SetTile(Point position, Tile tile)
-    {
-        RejectPositionOffTheMap(position, nameof(position));
-
-        _tiles[IndexOf(position)] = tile;
-    }
-
-    /// <summary>
-    /// True when a creature may stand at the position. Anything off the map answers false
-    /// rather than throwing, so movement code can ask about the cell beyond the edge.
-    /// </summary>
-    public bool IsWalkable(Point position)
-    {
-        // Outside the map is not a tile, so there is nothing to stand on.
-        if (!IsInBounds(position))
-        {
-            return false;
-        }
-
-        return _tiles[IndexOf(position)].IsWalkable;
-    }
-
-    // Row-major index; the single place the storage layout is expressed.
-    private int IndexOf(Point position)
-    {
-        return (position.Y * Width) + position.X;
-    }
-
-    // Shared guard for the two methods that have no sensible answer off the map.
-    private void RejectPositionOffTheMap(Point position, string parameterName)
-    {
-        // Reading or writing outside the map is a caller error, so fail where the mistake was made.
-        if (!IsInBounds(position))
-        {
-            throw new ArgumentOutOfRangeException(
-                parameterName,
-                position,
-                $"The position is outside the {Width}x{Height} map.");
-        }
-    }
-}
-```
-
-### `RogueTutorial/MapFactory.cs`
-
-The walled room with two pillars.
-
-```csharp
-/*
- * Builds the one map this part uses: a room walled all the way round, with two pillars in it.
- *
- * Real dungeon generation - rooms joined by corridors, placed at random - arrives in Part 3.
- * This exists so there is something for walls to be, and somewhere for a wall to stop you.
- *
- * Usage:
- *
- *     GameMap map = MapFactory.CreateWalledRoom(80, 25);
- *     bool edge = map.IsWalkable(new Point(0, 0));    // -> false, the border is wall
- *     bool inside = map.IsWalkable(new Point(1, 1));  // -> true, floor
- *
- * Refuses any size below 3x3, since a room smaller than that is all border and has no inside.
- */
-
-using System;
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal static class MapFactory
-{
-    /// <summary>
-    /// Returns a map whose outermost cells are wall and whose interior is floor, with two
-    /// pillars placed in the middle third. Throws ArgumentOutOfRangeException below 3x3, because
-    /// a smaller room has no walkable interior at all.
-    /// </summary>
-    public static GameMap CreateWalledRoom(int width, int height)
-    {
-        // Below 3x3 the border consumes the whole map and there is nowhere to stand.
-        if (width < 3)
-        {
-            throw new ArgumentOutOfRangeException(nameof(width), width, "A room needs at least 3 cells across.");
-        }
-        if (height < 3)
-        {
-            throw new ArgumentOutOfRangeException(nameof(height), height, "A room needs at least 3 cells down.");
-        }
-
-        // Starts as all floor, so only the walls have to be written.
-        GameMap room = new GameMap(width, height);
-
-        // Top and bottom rows.
-        for (int col = 0; col < width; col++)
-        {
-            room.SetTile(new Point(col, 0), TileTypes.Wall);
-            room.SetTile(new Point(col, height - 1), TileTypes.Wall);
-        }
-
-        // Left and right columns; the corners are written twice, which is harmless.
-        for (int row = 0; row < height; row++)
-        {
-            room.SetTile(new Point(0, row), TileTypes.Wall);
-            room.SetTile(new Point(width - 1, row), TileTypes.Wall);
-        }
-
-        // Two pillars, placed by proportion so they land inside a room of any size.
-        room.SetTile(new Point(width / 3, height / 2), TileTypes.Wall);
-        room.SetTile(new Point((width * 2) / 3, height / 2), TileTypes.Wall);
-
-        return room;
-    }
-}
-```
-
-### `RogueTutorial/Entity.cs`
-
-Name, glyph, colour, position.
-
-```csharp
-/*
- * Anything that occupies one cell and is drawn on top of the map: the player, a monster,
- * later an item lying on the floor.
- *
- * Usage:
- *
- *     Entity player = new Entity("Player", '@', Color.White, new Point(40, 12));
- *     Entity npc = new Entity("Villager", '@', Color.Yellow, new Point(42, 12));
- *     player.MoveTo(new Point(41, 12));   // unconditional; see MovementRules for the rules
- *     string who = player.Name;           // -> "Player", for messages in a later part
- *
- * Refuses a null, empty or whitespace name. It applies no movement rules of its own: whether a
- * destination is legal is the map's business, and MovementRules is where the two meet.
- */
-
-using System;
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal sealed class Entity
-{
-    /// <summary>What this is called, for messages such as "the Villager blocks the way".</summary>
-    public string Name { get; }
-
-    /// <summary>The character drawn for it.</summary>
-    public char Glyph { get; }
-
-    /// <summary>The colour that character is drawn in.</summary>
-    public Color Foreground { get; }
-
-    /// <summary>The cell it currently occupies.</summary>
-    public Point Position { get; private set; }
-
-    /// <summary>
-    /// Creates an entity at a starting cell. Throws ArgumentException on a blank name, since an
-    /// unnamed entity would surface much later as an empty word in a message.
-    /// </summary>
-    public Entity(string name, char glyph, Color foreground, Point startingPosition)
-    {
-        // A blank name is a construction mistake; fail here rather than in the message log.
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("An entity needs a name.", nameof(name));
-        }
-
-        Name = name;
-        Glyph = glyph;
-        Foreground = foreground;
-        Position = startingPosition;
-    }
-
-    /// <summary>
-    /// Puts the entity at the given cell unconditionally. The caller is expected to have decided
-    /// the destination is legal; MovementRules.DestinationFor is what makes that decision.
-    /// </summary>
-    public void MoveTo(Point destination)
-    {
-        Position = destination;
-    }
-}
-```
-
-### `RogueTutorial/MovementRules.cs`
-
-Where a move ends up, given the map.
-
-```csharp
-/*
- * Where a move actually ends up, given the map.
- *
- * This replaces Part 1's clamping. With walls in play, a blocked move must mean staying put
- * rather than sliding to the nearest legal cell - a wall you walk into is not a suggestion to
- * step sideways.
- *
- * Usage:
- *
- *     GameMap map = new GameMap(10, 10);
- *     map.SetTile(new Point(5, 4), TileTypes.Wall);
- *
- *     Point moved = MovementRules.DestinationFor(new Point(4, 4), new Point(0, 1), map);
- *     // -> (4, 5), an ordinary step onto floor
- *
- *     Point blocked = MovementRules.DestinationFor(new Point(4, 4), new Point(1, 0), map);
- *     // -> (4, 4), unchanged, because (5, 4) is a wall
- *
- * Refuses a null map. A zero offset returns the starting position untouched.
- */
-
-using System;
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal static class MovementRules
-{
-    /// <summary>
-    /// Returns the cell a move ends on. A destination that is a wall, or off the map, yields the
-    /// starting position: the move is refused rather than adjusted. Throws ArgumentNullException
-    /// on a null map.
-    /// </summary>
-    public static Point DestinationFor(Point start, Point offset, GameMap map)
-    {
-        // A null map is a wiring error rather than a blocked move.
-        ArgumentNullException.ThrowIfNull(map);
-
-        Point destination = start + offset;
-
-        // IsWalkable answers false off the map too, so one question covers walls and edges.
-        if (!map.IsWalkable(destination))
-        {
-            return start;
-        }
-
-        return destination;
-    }
-}
-```
-
-### `RogueTutorial/RenderedFrame.cs`
-
-The picture, as data.
-
-```csharp
-/*
- * The picture that should be on screen, as data rather than as pixels.
- *
- * Usage - compose one with FrameComposer, then either inspect it in a test or blit it:
- *
- *     RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
- *     char glyph = frame.GlyphAt(new Point(40, 12));   // -> '@'
- *     string picture = frame.ToText();                 // rows joined by newlines
- *
- * ToText is what makes drawing testable: an expected frame can be written in a test as an
- * ASCII picture and compared as a string.
- *
- * Refuses a null array, and an array whose length disagrees with the dimensions.
- */
-
-using System;
-using System.Text;
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal sealed class RenderedFrame
-{
-    // Glyphs in row-major order, one per cell.
-    private readonly char[] _glyphs;
-
-    // Colours in row-major order, matching _glyphs cell for cell.
-    private readonly Color[] _foregrounds;
-
-    /// <summary>Number of cells across.</summary>
-    public int Width { get; }
-
-    /// <summary>Number of cells down.</summary>
-    public int Height { get; }
-
-    /// <summary>
-    /// Wraps the two parallel arrays produced by FrameComposer. Throws ArgumentException when
-    /// either length disagrees with the dimensions, which would mean a bug in the composer.
-    /// </summary>
-    public RenderedFrame(int width, int height, char[] glyphs, Color[] foregrounds)
-    {
-        ArgumentNullException.ThrowIfNull(glyphs);
-        ArgumentNullException.ThrowIfNull(foregrounds);
-
-        // A length mismatch is a programming error in the composer, not a runtime condition.
-        if (glyphs.Length != width * height || foregrounds.Length != width * height)
-        {
-            throw new ArgumentException("Glyph and colour arrays must hold exactly width * height entries.");
-        }
-
-        Width = width;
-        Height = height;
-        _glyphs = glyphs;
-        _foregrounds = foregrounds;
-    }
-
-    /// <summary>The character at the position. Throws ArgumentOutOfRangeException off the frame.</summary>
-    public char GlyphAt(Point position)
-    {
-        RejectPositionOffTheFrame(position);
-
-        return _glyphs[(position.Y * Width) + position.X];
-    }
-
-    /// <summary>The colour at the position. Throws ArgumentOutOfRangeException off the frame.</summary>
-    public Color ForegroundAt(Point position)
-    {
-        RejectPositionOffTheFrame(position);
-
-        return _foregrounds[(position.Y * Width) + position.X];
-    }
-
-    /// <summary>
-    /// The whole frame as text, one line per row, joined with newlines and with no trailing
-    /// newline. This is what tests compare against an expected ASCII picture.
-    /// </summary>
-    public string ToText()
-    {
-        StringBuilder text = new StringBuilder();
-
-        for (int row = 0; row < Height; row++)
-        {
-            // A separator before every row but the first leaves no trailing newline.
-            if (row > 0)
-            {
-                text.Append('\n');
-            }
-
-            text.Append(_glyphs, row * Width, Width);
-        }
-
-        return text.ToString();
-    }
-
-    // Shared guard; reading outside the frame is always a caller error.
-    private void RejectPositionOffTheFrame(Point position)
-    {
-        if (position.X < 0 || position.X >= Width || position.Y < 0 || position.Y >= Height)
-        {
-            throw new ArgumentOutOfRangeException(nameof(position), position, "The position is outside the frame.");
-        }
-    }
-}
-```
-
-### `RogueTutorial/FrameComposer.cs`
-
-What builds the picture.
-
-```csharp
-/*
- * Builds the picture that should be on screen: the map first, then entities over the top.
- *
- * Usage:
- *
- *     GameMap map = new GameMap(3, 2);
- *     Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
- *     RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
- *     string picture = frame.ToText();
- *     // -> "...\n.@."
- *
- * Refuses a null map or null entity list. An entity standing off the map is skipped rather than
- * throwing, because a later part moves entities between levels.
- */
-
-using System;
-using System.Collections.Generic;
-using SadRogue.Primitives;
-
-namespace RogueTutorial;
-
-internal static class FrameComposer
-{
-    /// <summary>
-    /// Draws every map tile, then every entity over the top in list order, so a later entity
-    /// covers an earlier one sharing its cell. Throws ArgumentNullException on a null argument.
-    /// </summary>
-    public static RenderedFrame Compose(GameMap map, IReadOnlyList<Entity> entities)
-    {
-        ArgumentNullException.ThrowIfNull(map);
-        ArgumentNullException.ThrowIfNull(entities);
-
-        char[] glyphs = new char[map.Width * map.Height];
-        Color[] foregrounds = new Color[map.Width * map.Height];
-
-        // The map is the background layer, so it goes down first and entities paint over it.
+        // Every cell, not a sample: a fill bug that missed one row would pass a spot check.
         for (int row = 0; row < map.Height; row++)
         {
             for (int col = 0; col < map.Width; col++)
             {
-                Tile tile = map.GetTile(new Point(col, row));
-
-                int index = (row * map.Width) + col;
-                glyphs[index] = tile.Glyph;
-                foregrounds[index] = tile.Foreground;
+                Assert.True(map.IsWalkable(new Point(col, row)), $"cell ({col},{row}) should start walkable");
             }
         }
+    }
 
-        // List order decides who covers whom, so this loop must not be reordered.
-        foreach (Entity entity in entities)
+    [Fact]
+    public void TheMapKeepsTheSizeItWasGiven()
+    {
+        GameMap map = new GameMap(80, 25);
+
+        Assert.Equal(80, map.Width);
+        Assert.Equal(25, map.Height);
+    }
+
+    [Theory]
+    [InlineData(0, 0, true)]
+    [InlineData(3, 2, true)]
+    [InlineData(4, 2, false)]
+    [InlineData(3, 3, false)]
+    [InlineData(-1, 0, false)]
+    public void IsInBoundsAcceptsExactlyTheCellsOfTheMap(int x, int y, bool expected)
+    {
+        GameMap map = new GameMap(4, 3);
+
+        Assert.Equal(expected, map.IsInBounds(new Point(x, y)));
+    }
+
+    [Fact]
+    public void AWallIsNotWalkable()
+    {
+        GameMap map = new GameMap(4, 3);
+
+        map.SetTile(new Point(1, 1), TileTypes.Wall);
+
+        Assert.False(map.IsWalkable(new Point(1, 1)));
+    }
+
+    [Fact]
+    public void SettingOneTileLeavesItsNeighboursAlone()
+    {
+        GameMap map = new GameMap(4, 3);
+
+        map.SetTile(new Point(1, 1), TileTypes.Wall);
+
+        // A row-major indexing error would most likely show up on the neighbours.
+        Assert.True(map.IsWalkable(new Point(0, 1)));
+        Assert.True(map.IsWalkable(new Point(2, 1)));
+        Assert.True(map.IsWalkable(new Point(1, 0)));
+        Assert.True(map.IsWalkable(new Point(1, 2)));
+    }
+
+    [Fact]
+    public void SetTileAndGetTileAgreeOnWhichCellIsWhich()
+    {
+        GameMap map = new GameMap(4, 3);
+
+        // (2,0) and its transpose (0,2) are both on a 4x3 map, so swapping x and y
+        // in the index would write to the wrong one of them and this would catch it.
+        map.SetTile(new Point(2, 0), TileTypes.Wall);
+
+        Assert.Equal('#', map.GetTile(new Point(2, 0)).Glyph);
+        Assert.Equal('.', map.GetTile(new Point(0, 2)).Glyph);
+    }
+
+    [Fact]
+    public void WalkingOffTheMapIsNotPossible()
+    {
+        GameMap map = new GameMap(4, 3);
+
+        // Off the map answers false rather than throwing, so movement code can ask freely.
+        Assert.False(map.IsWalkable(new Point(-1, 0)));
+        Assert.False(map.IsWalkable(new Point(4, 0)));
+        Assert.False(map.IsWalkable(new Point(0, -1)));
+        Assert.False(map.IsWalkable(new Point(0, 3)));
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(4, 0)]
+    [InlineData(0, 3)]
+    public void ReadingOffTheMapIsRejected(int x, int y)
+    {
+        GameMap map = new GameMap(4, 3);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => map.GetTile(new Point(x, y)));
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(4, 0)]
+    [InlineData(0, 3)]
+    public void WritingOffTheMapIsRejected(int x, int y)
+    {
+        GameMap map = new GameMap(4, 3);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => map.SetTile(new Point(x, y), TileTypes.Wall));
+    }
+
+    [Theory]
+    [InlineData(0, 5)]
+    [InlineData(5, 0)]
+    public void ADimensionBelowOneIsRejected(int width, int height)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GameMap(width, height));
+    }
+}
+```
+
+### [`RogueTutorial.Tests/MapFactoryTests.cs`](../parts/part-02-entities-and-the-map/RogueTutorial.Tests/MapFactoryTests.cs)
+
+Every border cell, the pillar count, and that the room is the same every time.
+
+```csharp
+/*
+ * Unit tests for the one map this part builds. Expected values come from the description of
+ * the room: the outermost ring is wall, everything else is floor, and two pillars stand in it.
+ *
+ * Usage:  dotnet test --filter FullyQualifiedName~MapFactoryTests
+ */
+
+using System;
+using RogueTutorial;
+using SadRogue.Primitives;
+using Xunit;
+
+public sealed class MapFactoryTests
+{
+    [Fact]
+    public void TheRoomIsTheSizeAsked()
+    {
+        GameMap room = MapFactory.CreateWalledRoom(80, 25);
+
+        Assert.Equal(80, room.Width);
+        Assert.Equal(25, room.Height);
+    }
+
+    [Fact]
+    public void EveryBorderCellIsWall()
+    {
+        GameMap room = MapFactory.CreateWalledRoom(10, 6);
+
+        // Walk the whole border rather than sampling corners; a loop that stops one short
+        // leaves a gap the player can walk through, and a spot check would miss it.
+        for (int col = 0; col < room.Width; col++)
         {
-            // An entity between levels is legitimately off this map, so skip rather than throw.
-            if (!map.IsInBounds(entity.Position))
-            {
-                continue;
-            }
-
-            int index = (entity.Position.Y * map.Width) + entity.Position.X;
-            glyphs[index] = entity.Glyph;
-            foregrounds[index] = entity.Foreground;
+            Assert.False(room.IsWalkable(new Point(col, 0)), $"top border at x={col}");
+            Assert.False(room.IsWalkable(new Point(col, room.Height - 1)), $"bottom border at x={col}");
         }
 
-        return new RenderedFrame(map.Width, map.Height, glyphs, foregrounds);
+        for (int row = 0; row < room.Height; row++)
+        {
+            Assert.False(room.IsWalkable(new Point(0, row)), $"left border at y={row}");
+            Assert.False(room.IsWalkable(new Point(room.Width - 1, row)), $"right border at y={row}");
+        }
+    }
+
+    [Fact]
+    public void TheRoomHasAWalkableInterior()
+    {
+        GameMap room = MapFactory.CreateWalledRoom(10, 6);
+
+        // Not every interior cell - two of them are pillars - but the corners of the interior
+        // are always open, and a room with no floor at all would be useless.
+        Assert.True(room.IsWalkable(new Point(1, 1)));
+        Assert.True(room.IsWalkable(new Point(room.Width - 2, room.Height - 2)));
+    }
+
+    [Fact]
+    public void TheRoomContainsExactlyTwoPillars()
+    {
+        GameMap room = MapFactory.CreateWalledRoom(20, 10);
+
+        int wallsInsideTheBorder = 0;
+
+        for (int row = 1; row < room.Height - 1; row++)
+        {
+            for (int col = 1; col < room.Width - 1; col++)
+            {
+                if (!room.IsWalkable(new Point(col, row)))
+                {
+                    wallsInsideTheBorder++;
+                }
+            }
+        }
+
+        Assert.Equal(2, wallsInsideTheBorder);
+    }
+
+    [Fact]
+    public void TheRoomIsTheSameEveryTime()
+    {
+        // Nothing here is random yet; randomness arrives with generation in Part 3.
+        GameMap first = MapFactory.CreateWalledRoom(20, 10);
+        GameMap second = MapFactory.CreateWalledRoom(20, 10);
+
+        Assert.Equal(
+            FrameComposer.Compose(first, Array.Empty<Entity>()).ToText(),
+            FrameComposer.Compose(second, Array.Empty<Entity>()).ToText());
+    }
+
+    [Theory]
+    [InlineData(2, 5)]
+    [InlineData(5, 2)]
+    [InlineData(0, 0)]
+    public void ARoomTooSmallToHaveAnInsideIsRejected(int width, int height)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => MapFactory.CreateWalledRoom(width, height));
+    }
+}
+```
+
+### [`RogueTutorial.Tests/MovementRulesTests.cs`](../parts/part-02-entities-and-the-map/RogueTutorial.Tests/MovementRulesTests.cs)
+
+Steps onto floor land; steps into walls and off the map are refused rather than adjusted.
+
+```csharp
+/*
+ * Unit tests for where a move ends up. The rule under test is the one that replaced Part 1's
+ * clamping: a blocked move returns the starting cell unchanged, rather than sliding to the
+ * nearest legal one.
+ *
+ * Usage:  dotnet test --filter FullyQualifiedName~MovementRulesTests
+ */
+
+using System;
+using RogueTutorial;
+using SadRogue.Primitives;
+using Xunit;
+
+public sealed class MovementRulesTests
+{
+    // A 5x5 room of floor with a single wall at (2,2), so every direction can be tried.
+    private static GameMap MapWithACentralWall()
+    {
+        GameMap map = new GameMap(5, 5);
+        map.SetTile(new Point(2, 2), TileTypes.Wall);
+        return map;
+    }
+
+    [Fact]
+    public void AStepOntoFloorLands()
+    {
+        Point destination = MovementRules.DestinationFor(new Point(1, 1), new Point(1, 0), MapWithACentralWall());
+
+        Assert.Equal(new Point(2, 1), destination);
+    }
+
+    [Fact]
+    public void ADiagonalStepOntoFloorLands()
+    {
+        Point destination = MovementRules.DestinationFor(new Point(0, 0), new Point(1, 1), MapWithACentralWall());
+
+        Assert.Equal(new Point(1, 1), destination);
+    }
+
+    [Theory]
+    [InlineData(1, 2, 1, 0)]    // walking right into the wall
+    [InlineData(3, 2, -1, 0)]   // walking left into it
+    [InlineData(2, 1, 0, 1)]    // walking down into it
+    [InlineData(2, 3, 0, -1)]   // walking up into it
+    [InlineData(1, 1, 1, 1)]    // walking diagonally into it
+    public void AStepIntoAWallIsRefused(int startX, int startY, int offsetX, int offsetY)
+    {
+        Point start = new Point(startX, startY);
+
+        Point destination = MovementRules.DestinationFor(start, new Point(offsetX, offsetY), MapWithACentralWall());
+
+        // The whole point of the rule: unchanged, not adjusted to a neighbouring cell.
+        Assert.Equal(start, destination);
+    }
+
+    [Theory]
+    [InlineData(0, 1, -1, 0)]   // off the left edge
+    [InlineData(4, 1, 1, 0)]    // off the right edge
+    [InlineData(1, 0, 0, -1)]   // off the top
+    [InlineData(1, 4, 0, 1)]    // off the bottom
+    public void AStepOffTheMapIsRefused(int startX, int startY, int offsetX, int offsetY)
+    {
+        Point start = new Point(startX, startY);
+
+        Point destination = MovementRules.DestinationFor(start, new Point(offsetX, offsetY), MapWithACentralWall());
+
+        Assert.Equal(start, destination);
+    }
+
+    [Fact]
+    public void ARefusedMoveDoesNotSlideAlongTheWall()
+    {
+        // Part 1 clamped, which for a diagonal into a corner would have moved one axis anyway.
+        // The rule now is all or nothing, so this must not become (1,2) or (2,1).
+        Point start = new Point(1, 1);
+
+        Point destination = MovementRules.DestinationFor(start, new Point(1, 1), MapWithACentralWall());
+
+        Assert.Equal(new Point(1, 1), destination);
+    }
+
+    [Fact]
+    public void AZeroOffsetStaysPut()
+    {
+        Point destination = MovementRules.DestinationFor(new Point(3, 3), Point.Zero, MapWithACentralWall());
+
+        Assert.Equal(new Point(3, 3), destination);
+    }
+
+    [Fact]
+    public void ANullMapIsRejected()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => MovementRules.DestinationFor(Point.Zero, new Point(1, 0), null!));
+    }
+}
+```
+
+### [`RogueTutorial.Tests/FrameComposerTests.cs`](../parts/part-02-entities-and-the-map/RogueTutorial.Tests/FrameComposerTests.cs)
+
+The composed picture, written as ASCII. These are the tests Part 1 could not have.
+
+```csharp
+/*
+ * Unit tests for what should appear on screen. These are the tests Part 1 could not have:
+ * because the frame is data rather than pixels, an expected picture is written here as ASCII
+ * and compared as a string.
+ *
+ * Usage:  dotnet test --filter FullyQualifiedName~FrameComposerTests
+ */
+
+using System;
+using System.Collections.Generic;
+using RogueTutorial;
+using SadRogue.Primitives;
+using Xunit;
+
+public sealed class FrameComposerTests
+{
+    // Joins expected rows with the same separator ToText uses, so a test reads as a picture.
+    private static string Picture(params string[] rows)
+    {
+        return string.Join("\n", rows);
+    }
+
+    [Fact]
+    public void AnEmptyMapDrawsAsAllFloor()
+    {
+        GameMap map = new GameMap(3, 2);
+
+        RenderedFrame frame = FrameComposer.Compose(map, Array.Empty<Entity>());
+
+        Assert.Equal(
+            Picture(
+                "...",
+                "..."),
+            frame.ToText());
+    }
+
+    [Fact]
+    public void WallsDrawWhereTheyWereSet()
+    {
+        GameMap map = new GameMap(3, 3);
+        map.SetTile(new Point(0, 0), TileTypes.Wall);
+        map.SetTile(new Point(2, 2), TileTypes.Wall);
+
+        RenderedFrame frame = FrameComposer.Compose(map, Array.Empty<Entity>());
+
+        Assert.Equal(
+            Picture(
+                "#..",
+                "...",
+                "..#"),
+            frame.ToText());
+    }
+
+    [Fact]
+    public void AnEntityDrawsOverTheMap()
+    {
+        GameMap map = new GameMap(3, 2);
+        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
+
+        RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
+
+        Assert.Equal(
+            Picture(
+                "...",
+                ".@."),
+            frame.ToText());
+    }
+
+    [Fact]
+    public void SeveralEntitiesAllDraw()
+    {
+        GameMap map = new GameMap(4, 2);
+        Entity player = new Entity("Player", '@', Color.White, new Point(0, 0));
+        Entity villager = new Entity("Villager", 'V', Color.Yellow, new Point(3, 1));
+
+        RenderedFrame frame = FrameComposer.Compose(map, new[] { player, villager });
+
+        Assert.Equal(
+            Picture(
+                "@...",
+                "...V"),
+            frame.ToText());
+    }
+
+    [Fact]
+    public void ALaterEntityCoversAnEarlierOneOnTheSameCell()
+    {
+        GameMap map = new GameMap(2, 1);
+        Entity underneath = new Entity("Corpse", '%', Color.Red, new Point(0, 0));
+        Entity onTop = new Entity("Player", '@', Color.White, new Point(0, 0));
+
+        RenderedFrame frame = FrameComposer.Compose(map, new[] { underneath, onTop });
+
+        Assert.Equal("@.", frame.ToText());
+    }
+
+    [Fact]
+    public void AnEntityOffTheMapIsSkippedRatherThanThrowing()
+    {
+        GameMap map = new GameMap(2, 1);
+        Entity stray = new Entity("Stray", 'S', Color.Green, new Point(9, 9));
+
+        RenderedFrame frame = FrameComposer.Compose(map, new[] { stray });
+
+        Assert.Equal("..", frame.ToText());
+    }
+
+    [Fact]
+    public void TheEntityColourReachesTheFrame()
+    {
+        GameMap map = new GameMap(2, 1);
+        Entity villager = new Entity("Villager", 'V', Color.Yellow, new Point(1, 0));
+
+        RenderedFrame frame = FrameComposer.Compose(map, new[] { villager });
+
+        // ToText only carries glyphs, so colour needs its own check.
+        Assert.Equal(Color.Yellow, frame.ForegroundAt(new Point(1, 0)));
+    }
+
+    [Fact]
+    public void TheFrameMatchesTheMapSize()
+    {
+        GameMap map = new GameMap(7, 3);
+
+        RenderedFrame frame = FrameComposer.Compose(map, Array.Empty<Entity>());
+
+        Assert.Equal(7, frame.Width);
+        Assert.Equal(3, frame.Height);
+    }
+
+    [Fact]
+    public void ANullMapIsRejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => FrameComposer.Compose(null!, Array.Empty<Entity>()));
+    }
+
+    [Fact]
+    public void ANullEntityListIsRejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => FrameComposer.Compose(new GameMap(2, 2), null!));
+    }
+}
+```
+
+### [`RogueTutorial.Tests/MovementIntegrationTests.cs`](../parts/part-02-entities-and-the-map/RogueTutorial.Tests/MovementIntegrationTests.cs)
+
+The whole chain: key press, movement rule, entity, picture. This replaces Part 1's version.
+
+```csharp
+/*
+ * Integration tests: the key table, the map and the movement rule composed, which is the path
+ * RootScreen.ProcessKeyboard walks. Unit tests cover each piece; this level catches an axis
+ * swap or a wall consulted for the wrong cell, both of which survive every piece being right.
+ *
+ * Usage:  dotnet test --filter FullyQualifiedName~MovementIntegrationTests
+ */
+
+using System.Collections.Generic;
+using RogueTutorial;
+using SadConsole.Input;
+using SadRogue.Primitives;
+using Xunit;
+
+public sealed class MovementIntegrationTests
+{
+    // Walks an entity through a map one frame of key presses at a time, as the game loop does.
+    private static Point PositionAfter(GameMap map, Point start, IEnumerable<Keys[]> framesOfKeys)
+    {
+        Entity walker = new Entity("Walker", '@', Color.White, start);
+
+        foreach (Keys[] keysThisFrame in framesOfKeys)
+        {
+            Point offset = MovementKeys.OffsetFor(keysThisFrame);
+
+            walker.MoveTo(MovementRules.DestinationFor(walker.Position, offset, map));
+        }
+
+        return walker.Position;
+    }
+
+    [Fact]
+    public void PressingUpMovesTowardTheTopOfTheScreen()
+    {
+        // Y grows downward on a console grid, so "up" must decrease Y.
+        Point result = PositionAfter(new GameMap(9, 9), new Point(4, 4), new[] { new[] { Keys.Up } });
+
+        Assert.Equal(new Point(4, 3), result);
+    }
+
+    [Fact]
+    public void FourFramesOfRightMoveFourCells()
+    {
+        Point result = PositionAfter(
+            new GameMap(9, 9),
+            new Point(1, 1),
+            new[] { new[] { Keys.Right }, new[] { Keys.Right }, new[] { Keys.Right }, new[] { Keys.Right } });
+
+        Assert.Equal(new Point(5, 1), result);
+    }
+
+    [Fact]
+    public void WalkingIntoAWallStopsWithoutSliding()
+    {
+        GameMap map = new GameMap(9, 9);
+        map.SetTile(new Point(4, 3), TileTypes.Wall);
+
+        // Three presses up from (4,4): the first is refused, and so are the other two.
+        Point result = PositionAfter(
+            map,
+            new Point(4, 4),
+            new[] { new[] { Keys.Up }, new[] { Keys.Up }, new[] { Keys.Up } });
+
+        Assert.Equal(new Point(4, 4), result);
+    }
+
+    [Fact]
+    public void AWalledRoomHoldsThePlayerIn()
+    {
+        GameMap room = MapFactory.CreateWalledRoom(9, 9);
+
+        // Ten presses left from the interior's left edge; the border must stop every one.
+        List<Keys[]> tenPressesLeft = new List<Keys[]>();
+        for (int frame = 0; frame < 10; frame++)
+        {
+            tenPressesLeft.Add(new[] { Keys.Left });
+        }
+
+        Point result = PositionAfter(room, new Point(2, 1), tenPressesLeft);
+
+        Assert.Equal(new Point(1, 1), result);
+        Assert.True(room.IsWalkable(result));
+    }
+
+    [Fact]
+    public void AKeypadCornerReachesTheSameCellAsTwoCardinals()
+    {
+        GameMap map = new GameMap(9, 9);
+        Point start = new Point(4, 4);
+
+        Point viaCorner = PositionAfter(map, start, new[] { new[] { Keys.NumPad7 } });
+        Point viaCardinals = PositionAfter(map, start, new[] { new[] { Keys.Left, Keys.Up } });
+
+        Assert.Equal(viaCorner, viaCardinals);
+    }
+
+    [Fact]
+    public void ThePlayerAppearsWhereTheMoveLeftIt()
+    {
+        GameMap room = MapFactory.CreateWalledRoom(5, 5);
+        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
+
+        player.MoveTo(MovementRules.DestinationFor(player.Position, MovementKeys.OffsetFor(new[] { Keys.Right }), room));
+
+        // The frame is the end of the whole chain: key -> rule -> entity -> picture.
+        // Row 2 holds both pillars: width/3 = 1 and (width*2)/3 = 3 on row height/2 = 2,
+        // which on a 5-wide room leaves only the middle cell of that row open.
+        Assert.Equal(
+            string.Join("\n", "#####", "#.@.#", "##.##", "#...#", "#####"),
+            FrameComposer.Compose(room, new[] { player }).ToText());
     }
 }
 ```
@@ -929,7 +971,8 @@ private static Point PositionAfter(GameMap map, Point start, IEnumerable<Keys[]>
 Three differences, and they are the whole part in miniature: the bounds became a map, the mover
 became an entity, and the move rule moved out of the thing that holds the position.
 
-**Then update the tests in that same file**, `RogueTutorial.Tests/MovementIntegrationTests.cs`.
+**Then update the tests in that same file**,
+[`RogueTutorial.Tests/MovementIntegrationTests.cs`](../parts/part-02-entities-and-the-map/RogueTutorial.Tests/MovementIntegrationTests.cs).
 It has five tests in Part 1. Three are kept and edited, two are deleted:
 
 | Part 1 test | What happens to it |
@@ -1051,7 +1094,7 @@ message showed the difference immediately - which is the red step doing its job.
 `PlayerMover` fields that no longer exist, and a partial paste leaves a class that references
 both and compiles as neither.
 
-`RogueTutorial/RootScreen.cs`, in full:
+[`RogueTutorial/RootScreen.cs`](../parts/part-02-entities-and-the-map/RogueTutorial/RootScreen.cs), in full:
 
 ```csharp
 /*
@@ -1205,6 +1248,34 @@ Expected: a clean build, 87 passing tests, and a room you cannot walk out of.
 | The player can walk off the edge | `IsWalkable` is not answering `false` outside the map |
 | Entities are invisible | The entity loop runs before the map loop, so the map paints over them |
 | `CS0246: PlayerMover could not be found` | Step 2 deleted it; something still refers to it, probably the old integration tests |
+
+## Step 6: regenerate the documentation
+
+Skip this if you did not set up docfx in Part 1.
+
+**Delete the stale metadata first.** docfx writes one `.yml` per type into `api/` and never
+removes the ones whose type has gone, so `PlayerMover` would keep a page in the generated site long after
+it was deleted from the source. Clear the generated files before rebuilding:
+
+```
+del api\*.yml
+del api\.manifest
+```
+
+`api/index.md` is yours and hand-written, so leave it. Everything else in that folder is output.
+
+Then rebuild:
+
+```
+dotnet docfx docfx.json --serve --port 8081
+```
+
+Expected: `Build succeeded. 0 warning(s) 0 error(s)`, and pages for `Tile`, `GameMap`, `Entity`, `MovementRules`, `FrameComposer` and the rest at
+<http://localhost:8081>.
+
+The pages come from the `///` comments you wrote on each class and method - which is the reason
+those comments state what a method refuses as well as what it does. A generated reference is only
+worth as much as the comments behind it.
 
 ---
 

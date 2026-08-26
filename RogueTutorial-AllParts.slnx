@@ -8,4 +8,8 @@
     <Project Path="parts/part-02-entities-and-the-map/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-02-entities-and-the-map/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-03-dungeon-generation/">
+    <Project Path="parts/part-03-dungeon-generation/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-03-dungeon-generation/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>

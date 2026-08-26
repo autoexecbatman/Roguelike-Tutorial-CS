@@ -921,6 +921,20 @@ free the port or change it, then run again and read whatever error comes next.
 
 To build the site without serving it, drop `--serve`. The output lands in `_site/`.
 
+### Rebuilding after you delete a class
+
+docfx writes one `.yml` per type into `api/` and **never removes the ones whose type has gone**,
+so a class you delete keeps its page in the generated site indefinitely. Later parts of this
+tutorial delete classes, so clear the generated files before rebuilding:
+
+```
+del api\*.yml
+del api\.manifest
+dotnet docfx docfx.json
+```
+
+`api/index.md` is yours and hand-written; leave it. Everything else in that folder is output.
+
 ### Where the output goes
 
 ```
