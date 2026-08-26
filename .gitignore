@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+
+# IDE state
+.vs/
+.vscode/
+*.user
+
+# Documentation output, generated from source by docfx
+_site/
+api/*.yml
+api/toc.yml
+api/.manifest
+
+# Context and memory files are deliberately untracked; they change constantly
+CLAUDE.md

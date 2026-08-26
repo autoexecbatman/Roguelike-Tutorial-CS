@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/parts/" />
+  <Folder Name="/parts/part-01-drawing-and-moving/">
+    <Project Path="parts/part-01-drawing-and-moving/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-01-drawing-and-moving/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
+</Solution>
