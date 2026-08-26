@@ -53,6 +53,7 @@ PARTS = [
     "part-09-ranged-scrolls-and-targeting",
     "part-10-saving-and-loading",
     "part-11-levelling-up",
+    "part-12-deeper-levels",
 ]
 
 # Names too generic to match reliably: they appear in prose and in unrelated code.

@@ -12,7 +12,9 @@ arguments reached a reader once.
 
 Program.cs is excluded from the completeness check. Every part changes exactly one line of it,
 the window title, and each walkthrough gives that line in its own step; reprinting forty lines
-per part to show one would be noise.
+per part to show one would be noise. That one line is checked separately at the end, because the
+exclusion is what let six parts ship a window titled "Part 5" while their own Step 1 said
+otherwise.
 
 Usage - from the repository root:
 
@@ -22,7 +24,7 @@ Prints one line per part and a total. A non-zero total means a block no longer m
 or a changed file is missing from the text.
 """
 
-import re, os, glob
+import re, os, glob, io
 
 os.chdir(r"D:\repo\roguelikeTutorialC#")
 
@@ -39,6 +41,7 @@ PARTS = [
     "part-09-ranged-scrolls-and-targeting",
     "part-10-saving-and-loading",
     "part-11-levelling-up",
+    "part-12-deeper-levels",
 ]
 
 # One line of this changes per part, and each walkthrough gives that line in its own step.
@@ -77,7 +80,7 @@ def changed_files(part, previous_part):
 total_stale = 0
 total_missing = 0
 total_missing = 0
-for doc in sorted(glob.glob("docs/part-0*.md")):
+for doc in sorted(glob.glob("docs/part-*.md")):
     part = os.path.basename(doc).replace(".md", "")
     root = os.path.join("parts", part)
     if not os.path.isdir(root):
@@ -114,3 +117,33 @@ for doc in sorted(glob.glob("docs/part-0*.md")):
 
 print(f"\ntotal stale blocks: {total_stale}")
 print(f"total missing files: {total_missing}")
+
+# Program.cs is excluded above, so the one line each walkthrough prints for it is the only claim
+# about that file nothing else verifies. Six parts shipped a window titled "Part 5" while their
+# own Step 1 gave the right line, and no check could see it.
+TITLE = r'const string WindowTitle = "([^"]*)"'
+
+print()
+wrong_titles = 0
+
+for doc in sorted(glob.glob("docs/part-*.md")):
+    part = os.path.basename(doc)[:-3]
+    program = os.path.join("parts", part, "RogueTutorial", "Program.cs")
+
+    if not os.path.isfile(program):
+        continue
+
+    wanted = re.search(TITLE, io.open(doc, encoding="utf-8").read())
+    actual = re.search(TITLE, io.open(program, encoding="utf-8").read())
+
+    # A missing line on either side is a failure: the comparison could not be made.
+    if wanted is None or actual is None:
+        wrong_titles += 1
+        print(f"{part}: no title line to compare")
+        continue
+
+    if wanted.group(1) != actual.group(1):
+        wrong_titles += 1
+        print(f"{part}: walkthrough says {wanted.group(1)!r}, Program.cs says {actual.group(1)!r}")
+
+print(f"total wrong window titles: {wrong_titles}")

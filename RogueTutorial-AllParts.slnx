@@ -44,4 +44,8 @@
     <Project Path="parts/part-11-levelling-up/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-11-levelling-up/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-12-deeper-levels/">
+    <Project Path="parts/part-12-deeper-levels/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-12-deeper-levels/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>
