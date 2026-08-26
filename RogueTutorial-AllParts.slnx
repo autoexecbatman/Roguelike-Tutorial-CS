@@ -28,4 +28,8 @@
     <Project Path="parts/part-07-log-and-health-bar/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-07-log-and-health-bar/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-08-items-and-inventory/">
+    <Project Path="parts/part-08-items-and-inventory/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-08-items-and-inventory/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>

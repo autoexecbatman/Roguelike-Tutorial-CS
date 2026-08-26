@@ -31,6 +31,7 @@ PARTS = [
     "part-05-placing-monsters",
     "part-06-combat",
     "part-07-log-and-health-bar",
+    "part-08-items-and-inventory",
 ]
 
 # Marks a block this tool generated, so a re-run can strip it without touching prose.

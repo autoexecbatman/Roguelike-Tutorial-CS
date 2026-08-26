@@ -1,0 +1,100 @@
+/*
+ * What a key press means, worked out before anything acts on it.
+ *
+ * Until Part 8 there was one kind of input: a movement key that spent a turn. Now the same key
+ * means different things depending on what the player is doing - 'd' walks nowhere on the map
+ * and picks slot four in the inventory - so the meaning has to be decided somewhere, and it must
+ * not be RootScreen, which no test can construct.
+ *
+ * Part 9's targeting cursor and Part 10's prompts need exactly this machinery, which is why it
+ * is a type rather than a couple of branches inside the keyboard handler.
+ *
+ * Usage:
+ *
+ *     GameCommand command = CommandReader.Read(keys, world.Mode);
+ *
+ *     if (command.Kind == GameCommandKind.Move)  { world.MovePlayer(command.Offset); }
+ *     if (command.Kind == GameCommandKind.UseItem) { world.UseItem(command.Slot); }
+ *
+ * Offset is meaningful only for Move, and Slot only for UseItem and DropItem. Nothing else
+ * carries either.
+ */
+
+using SadRogue.Primitives;
+
+namespace RogueTutorial;
+
+/// <summary>What the player is doing, which decides what their keys mean.</summary>
+internal enum GameMode
+{
+    /// <summary>Walking the dungeon. Movement keys move, and everything costs a turn.</summary>
+    Playing,
+
+    /// <summary>The pack is open. Letters choose an item and Escape closes it.</summary>
+    ShowingInventory,
+}
+
+/// <summary>The kinds of thing a key press can mean.</summary>
+internal enum GameCommandKind
+{
+    /// <summary>The key means nothing in this mode. Nothing happens and no turn is spent.</summary>
+    None,
+
+    /// <summary>Walk or attack in a direction.</summary>
+    Move,
+
+    /// <summary>Pick up whatever is underfoot.</summary>
+    PickUp,
+
+    /// <summary>Open the pack.</summary>
+    OpenInventory,
+
+    /// <summary>Close the pack without doing anything.</summary>
+    CloseInventory,
+
+    /// <summary>Use the item in a slot.</summary>
+    UseItem,
+
+    /// <summary>Drop the item in a slot.</summary>
+    DropItem,
+}
+
+internal readonly struct GameCommand
+{
+    /// <summary>What the key meant.</summary>
+    public GameCommandKind Kind { get; }
+
+    /// <summary>Which way to move. Point.Zero for every kind but Move.</summary>
+    public Point Offset { get; }
+
+    /// <summary>Which pack slot. Minus one for every kind but UseItem and DropItem.</summary>
+    public int Slot { get; }
+
+    private GameCommand(GameCommandKind kind, Point offset, int slot)
+    {
+        Kind = kind;
+        Offset = offset;
+        Slot = slot;
+    }
+
+    /// <summary>The key meant nothing in this mode.</summary>
+    public static GameCommand None => new GameCommand(GameCommandKind.None, Point.Zero, -1);
+
+    /// <summary>Walk or attack in a direction.</summary>
+    public static GameCommand Move(Point offset) => new GameCommand(GameCommandKind.Move, offset, -1);
+
+    /// <summary>Pick up whatever is underfoot.</summary>
+    public static GameCommand PickUp => new GameCommand(GameCommandKind.PickUp, Point.Zero, -1);
+
+    /// <summary>Open the pack.</summary>
+    public static GameCommand OpenInventory => new GameCommand(GameCommandKind.OpenInventory, Point.Zero, -1);
+
+    /// <summary>Close the pack.</summary>
+    public static GameCommand CloseInventory => new GameCommand(GameCommandKind.CloseInventory, Point.Zero, -1);
+
+    /// <summary>Use what is in a slot.</summary>
+    public static GameCommand UseItem(int slot) => new GameCommand(GameCommandKind.UseItem, Point.Zero, slot);
+
+    /// <summary>Drop what is in a slot.</summary>
+    public static GameCommand DropItem(int slot) => new GameCommand(GameCommandKind.DropItem, Point.Zero, slot);
+}
