@@ -13,8 +13,10 @@ Three things keep it honest, and every one was needed - the versions without the
 thirty-one imaginary problems or reported none at all while the real fault was in front of it:
 
 - Comments are stripped, because a usage block routinely names a type the file does not depend on.
-- A member declared in more than one listed file is skipped, since a bare `.Width` cannot be
-  attributed to either.
+- A member declared in more than one listed file is reported only when every file declaring it
+  comes later. Skipping such names outright was simpler and wrong: RestoreMemory is declared on
+  both GameWorld and VisibilityMap, and discarding it hid a real forward reference. If every
+  declarer is later, the call is forward whichever one it meant.
 - Only public and internal members count as declarations. Without that, Consumable's private Heal
   helper made Fighter's public Heal ambiguous, and the check went silent on the exact case it was
   written for.
@@ -22,6 +24,8 @@ thirty-one imaginary problems or reported none at all while the real fault was i
   constructor, and Entity's property of the same name are three different things; counting the
   first two made the property ambiguous, which hid Entity's new components from the check
   entirely.
+- A one-letter member is not attributable at all: SavedEntity.Y and Keys.Y look identical to a
+  textual match.
 
 What is left is a name introduced by exactly one file and called, in code, by a file listed
 before it. Falsify it after any change: move a file above one it depends on and watch it report.
@@ -47,10 +51,17 @@ PARTS = [
     "part-07-log-and-health-bar",
     "part-08-items-and-inventory",
     "part-09-ranged-scrolls-and-targeting",
+    "part-10-saving-and-loading",
 ]
 
 # Names too generic to match reliably: they appear in prose and in unrelated code.
 IGNORED_NAMES = {"Main", "ToString", "Equals", "GetHashCode", "Read", "Write", "Add", "Remove"}
+
+
+def is_attributable(name):
+    """A one-letter member cannot be blamed on a file: SavedEntity.Y and Keys.Y look the same."""
+    return len(name) > 1
+
 
 # Line and block comments. A usage block naming a type is not a dependency on the file that
 # declares it, and matching inside comments is what made the first version of this useless.
@@ -84,6 +95,7 @@ def declared_names(path):
         if visibility in ("public", "internal")
         and name not in IGNORED_NAMES
         and name != own_type
+        and is_attributable(name)
     }
 
 
@@ -114,26 +126,41 @@ def main():
             before = declared_names(os.path.join(previous_dir, name)) if previous_dir else set()
             introduced[name] = now - before
 
-        # A member declared in more than one listed file cannot be attributed to either, so a
-        # bare `.Width` is evidence of nothing.
-        seen = set()
-        ambiguous = set()
-        for name in files:
+        # Every member the previous part already had, anywhere in it.
+        existed_before = set()
+        if previous_dir and os.path.isdir(previous_dir):
+            for name in sorted(os.listdir(previous_dir)):
+                if name.endswith(".cs"):
+                    existed_before |= declared_names(os.path.join(previous_dir, name))
+
+        # Where each member is declared, so a name on two files can still be judged rather than
+        # thrown away. Discarding them outright hid three real faults before this replaced it.
+        declared_in = {}
+        for position, name in enumerate(files):
             for member in declared_names(os.path.join(source_dir, name)):
-                if member in seen:
-                    ambiguous.add(member)
-                seen.add(member)
+                declared_in.setdefault(member, []).append(position)
 
         problems = []
 
         for position, name in enumerate(files):
             body = COMMENTS.sub("", open(os.path.join(source_dir, name), encoding="utf-8").read())
 
-            own = declared_names(os.path.join(source_dir, name))
+            # Anything introduced by a file listed later is a forward reference for the reader -
+            # but only when every file declaring that name comes later. If any declarer is at or
+            # before this one, the call could have meant that, and reporting it would be noise.
+            for later_position in range(position + 1, len(files)):
+                later = files[later_position]
 
-            # Anything introduced by a file listed later is a forward reference for the reader.
-            for later in files[position + 1:]:
-                for member in introduced[later] - ambiguous - own:
+                for member in introduced[later]:
+                    if any(where <= position for where in declared_in.get(member, [])):
+                        continue
+
+                    # A name that already existed last part resolves without anything listed
+                    # here: Entity.Name predates Part 8, so a call to .Name is not waiting on
+                    # the ItemKind.Name that part happens to add.
+                    if member in existed_before:
+                        continue
+
                     if re.search(rf"\.{re.escape(member)}\b", body):
                         problems.append(f"{name} uses {later}'s {member}")
 

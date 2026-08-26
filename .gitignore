@@ -15,3 +15,4 @@ api/.manifest
 
 # Context and memory files are deliberately untracked; they change constantly
 CLAUDE.md
+savegame.json
