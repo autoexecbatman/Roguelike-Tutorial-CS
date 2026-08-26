@@ -32,6 +32,7 @@ PARTS = [
     "part-06-combat",
     "part-07-log-and-health-bar",
     "part-08-items-and-inventory",
+    "part-09-ranged-scrolls-and-targeting",
 ]
 
 # Marks a block this tool generated, so a re-run can strip it without touching prose.

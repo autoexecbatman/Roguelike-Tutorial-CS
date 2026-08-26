@@ -46,6 +46,7 @@ PARTS = [
     "part-06-combat",
     "part-07-log-and-health-bar",
     "part-08-items-and-inventory",
+    "part-09-ranged-scrolls-and-targeting",
 ]
 
 # Names too generic to match reliably: they appear in prose and in unrelated code.

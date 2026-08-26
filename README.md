@@ -62,7 +62,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | [6. Combat](docs/part-06-combat.md) | Fighting as a component, monster turns, and death | [code](parts/part-06-combat/) |
 | [7. Message log and health bar](docs/part-07-log-and-health-bar.md) | Dividing the window, and an interface you can assert | [code](parts/part-07-log-and-health-bar/) |
 | [8. Items and inventory](docs/part-08-items-and-inventory.md) | Modal input, components for items, and a pack with a limit | [code](parts/part-08-items-and-inventory/) |
-| 9. Ranged scrolls and targeting | Choosing a target on the map | planned |
+| [9. Ranged scrolls and targeting](docs/part-09-ranged-scrolls-and-targeting.md) | A mode that remembers where it came from | [code](parts/part-09-ranged-scrolls-and-targeting/) |
 | 10. Save and load | Persisting the game between runs | planned |
 | 11. Levelling up | Experience and character progression | planned |
 | 12. Deeper levels | Monsters and loot that scale with depth | planned |

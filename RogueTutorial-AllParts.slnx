@@ -32,4 +32,8 @@
     <Project Path="parts/part-08-items-and-inventory/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-08-items-and-inventory/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-09-ranged-scrolls-and-targeting/">
+    <Project Path="parts/part-09-ranged-scrolls-and-targeting/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-09-ranged-scrolls-and-targeting/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>
