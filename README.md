@@ -66,7 +66,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | [10. Save and load](docs/part-10-saving-and-loading.md) | What the game is, as opposed to how you are looking at it | [code](parts/part-10-saving-and-loading/) |
 | [11. Levelling up](docs/part-11-levelling-up.md) | Earning a level and choosing what it buys | [code](parts/part-11-levelling-up/) |
 | [12. Deeper levels](docs/part-12-deeper-levels.md) | Stairs, a dungeon that gets worse, and draw order as a rule | [code](parts/part-12-deeper-levels/) |
-| 13. Equipment | Weapons and armour that change your numbers | planned |
+| [13. Equipment](docs/part-13-equipment.md) | Weapons and armour, and numbers that are read rather than stored | [code](parts/part-13-equipment/) |
 
 ## Repository layout
 

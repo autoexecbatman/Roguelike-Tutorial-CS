@@ -48,4 +48,8 @@
     <Project Path="parts/part-12-deeper-levels/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-12-deeper-levels/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-13-equipment/">
+    <Project Path="parts/part-13-equipment/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-13-equipment/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>

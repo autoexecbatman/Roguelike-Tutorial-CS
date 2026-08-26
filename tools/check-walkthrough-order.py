@@ -54,6 +54,7 @@ PARTS = [
     "part-10-saving-and-loading",
     "part-11-levelling-up",
     "part-12-deeper-levels",
+    "part-13-equipment",
 ]
 
 # Names too generic to match reliably: they appear in prose and in unrelated code.
