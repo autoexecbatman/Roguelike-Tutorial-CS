@@ -615,7 +615,7 @@ using RogueTutorial;
 
 const int ScreenWidthInCells = 80;
 const int ScreenHeightInCells = 25;
-const string WindowTitle = "Roguelike Tutorial - Part 1";
+const string WindowTitle = "Roguelike Tutorial - Part 1: Drawing and moving the player";
 
 Builder gameStartup = new Builder()
     .SetWindowSizeInCells(ScreenWidthInCells, ScreenHeightInCells)

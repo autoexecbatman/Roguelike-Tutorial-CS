@@ -1444,6 +1444,16 @@ public sealed class MovementIntegrationTests
 }
 ```
 
+## Step 2b: retitle the window
+
+One line in `RogueTutorial/Program.cs`, so the window says which part you are running:
+
+```csharp
+const string WindowTitle = "Roguelike Tutorial - Part 3: Dungeon generation";
+```
+
+Nothing else in that file changes.
+
 ## Step 3: delete `MapFactory`
 
 ```

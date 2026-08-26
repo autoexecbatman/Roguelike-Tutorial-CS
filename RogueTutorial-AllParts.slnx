@@ -16,4 +16,8 @@
     <Project Path="parts/part-04-field-of-view/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-04-field-of-view/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-05-placing-monsters/">
+    <Project Path="parts/part-05-placing-monsters/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-05-placing-monsters/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>

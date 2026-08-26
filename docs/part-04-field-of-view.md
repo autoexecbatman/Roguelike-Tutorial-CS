@@ -1029,6 +1029,16 @@ internal sealed class RootScreen : ScreenObject
 }
 ```
 
+## Step 1b: retitle the window
+
+One line in `RogueTutorial/Program.cs`, so the window says which part you are running:
+
+```csharp
+const string WindowTitle = "Roguelike Tutorial - Part 4: Field of view";
+```
+
+Nothing else in that file changes.
+
 ## Step 2: the test files
 
 **Each block below is the complete file.** Create it in `RogueTutorial.Tests/`.

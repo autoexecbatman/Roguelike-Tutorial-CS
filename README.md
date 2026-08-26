@@ -58,7 +58,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | [2. The entity class and the map](docs/part-02-entities-and-the-map.md) | Walls that stop you, a second character, and a testable picture | [code](parts/part-02-entities-and-the-map/) |
 | [3. Dungeon generation](docs/part-03-dungeon-generation.md) | Random rooms joined by corridors, and how to test randomness | [code](parts/part-03-dungeon-generation/) |
 | [4. Field of view](docs/part-04-field-of-view.md) | Sight, memory, and why symmetry matters | [code](parts/part-04-field-of-view/) |
-| 5. Placing monsters | Things that occupy space | planned |
+| [5. Placing monsters](docs/part-05-placing-monsters.md) | Monsters that block you, and state that leaves the screen class | [code](parts/part-05-placing-monsters/) |
 | 6. Combat | Attacking, taking damage, dying | planned |
 | 7. Message log and health bar | Telling the player what happened | planned |
 | 8. Items and inventory | Picking things up and using them | planned |
