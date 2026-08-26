@@ -59,7 +59,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | [3. Dungeon generation](docs/part-03-dungeon-generation.md) | Random rooms joined by corridors, and how to test randomness | [code](parts/part-03-dungeon-generation/) |
 | [4. Field of view](docs/part-04-field-of-view.md) | Sight, memory, and why symmetry matters | [code](parts/part-04-field-of-view/) |
 | [5. Placing monsters](docs/part-05-placing-monsters.md) | Monsters that block you, and state that leaves the screen class | [code](parts/part-05-placing-monsters/) |
-| 6. Combat | Attacking, taking damage, dying | planned |
+| [6. Combat](docs/part-06-combat.md) | Fighting as a component, monster turns, and death | [code](parts/part-06-combat/) |
 | 7. Message log and health bar | Telling the player what happened | planned |
 | 8. Items and inventory | Picking things up and using them | planned |
 | 9. Ranged scrolls and targeting | Choosing a target on the map | planned |

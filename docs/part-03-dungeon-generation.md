@@ -243,10 +243,94 @@ DebugAssertException : Method Debug.Fail failed with
 ## Step 1: add `Fill` to `GameMap`
 
 Generation starts from solid rock and carves out of it, so the map needs to be filled with wall
-first. Add this method to [`RogueTutorial/GameMap.cs`](../parts/part-03-dungeon-generation/RogueTutorial/GameMap.cs),
-next to the other tile methods. This is an addition to an existing file, not a replacement:
+first. That is one new method on a file you already have.
+
+### [`RogueTutorial/GameMap.cs`](../parts/part-03-dungeon-generation/RogueTutorial/GameMap.cs)
+
+The Part 2 file with `Fill` added. The constructor still fills with floor, so nothing from
+Part 2 changes behaviour.
+
+<!-- generated-diff -->
+**Changed from Part 2.** The complete file follows; this is only what moved:
+
+```diff
+--- part-02-entities-and-the-map/GameMap.cs
++++ current/GameMap.cs
+@@ -47,6 +47,18 @@
+         for (int index = 0; index < _tiles.Length; index++)
+         {
+             _tiles[index] = TileTypes.Floor;
++        }
++    }
++
++    /// <summary>
++    /// Sets every cell to the same tile. Generation starts by filling with wall, since carving
++    /// rooms out of rock is fewer writes than walling in every space that is not a room.
++    /// </summary>
++    public void Fill(Tile tile)
++    {
++        for (int index = 0; index < _tiles.Length; index++)
++        {
++            _tiles[index] = tile;
+         }
+     }
+ 
+```
+<!-- generated-diff -->
 
 ```csharp
+/*
+ * The dungeon floor: a rectangle of tiles, and the questions the game asks about it.
+ *
+ * Usage - build one, fill it, then ask what a position permits:
+ *
+ *     GameMap map = new GameMap(80, 25);          // every cell starts as floor
+ *     map.SetTile(new Point(5, 5), TileTypes.Wall);
+ *     bool blocked = map.IsWalkable(new Point(5, 5));   // -> false
+ *     bool offMap = map.IsWalkable(new Point(-1, 0));   // -> false, outside is never walkable
+ *     Tile tile = map.GetTile(new Point(0, 0));         // -> TileTypes.Floor
+ *
+ * Refuses a position outside the map in GetTile and SetTile, because reading or writing off
+ * the map is a caller error. IsWalkable answers false instead, since asking whether you may
+ * step off the edge is an ordinary question.
+ */
+
+using System;
+using SadRogue.Primitives;
+
+namespace RogueTutorial;
+
+internal sealed class GameMap
+{
+    // The rectangle of legal positions; reused from Part 1.
+    private readonly GridBounds _bounds;
+
+    // Tiles in row-major order, indexed as [y * Width + x].
+    private readonly Tile[] _tiles;
+
+    /// <summary>Number of cells across.</summary>
+    public int Width => _bounds.Width;
+
+    /// <summary>Number of cells down.</summary>
+    public int Height => _bounds.Height;
+
+    /// <summary>
+    /// Creates a map of the given size with every cell set to floor. Throws
+    /// ArgumentOutOfRangeException when either dimension is below one.
+    /// </summary>
+    public GameMap(int width, int height)
+    {
+        _bounds = new GridBounds(width, height);
+
+        _tiles = new Tile[width * height];
+
+        // A map of default-constructed tiles would be unwalkable and invisible, so fill it.
+        for (int index = 0; index < _tiles.Length; index++)
+        {
+            _tiles[index] = TileTypes.Floor;
+        }
+    }
+
     /// <summary>
     /// Sets every cell to the same tile. Generation starts by filling with wall, since carving
     /// rooms out of rock is fewer writes than walling in every space that is not a room.
@@ -258,9 +342,70 @@ next to the other tile methods. This is an addition to an existing file, not a r
             _tiles[index] = tile;
         }
     }
-```
 
-The constructor still fills with floor, so nothing from Part 2 changes behaviour.
+    /// <summary>True when the position is a cell of this map.</summary>
+    public bool IsInBounds(Point position)
+    {
+        return _bounds.Contains(position);
+    }
+
+    /// <summary>
+    /// Returns the tile at the position. Throws ArgumentOutOfRangeException when the position
+    /// is off the map; use IsInBounds first if that is a possibility.
+    /// </summary>
+    public Tile GetTile(Point position)
+    {
+        RejectPositionOffTheMap(position, nameof(position));
+
+        return _tiles[IndexOf(position)];
+    }
+
+    /// <summary>
+    /// Replaces the tile at the position. Throws ArgumentOutOfRangeException when the position
+    /// is off the map, because writing outside the map is always a mistake.
+    /// </summary>
+    public void SetTile(Point position, Tile tile)
+    {
+        RejectPositionOffTheMap(position, nameof(position));
+
+        _tiles[IndexOf(position)] = tile;
+    }
+
+    /// <summary>
+    /// True when a creature may stand at the position. Anything off the map answers false
+    /// rather than throwing, so movement code can ask about the cell beyond the edge.
+    /// </summary>
+    public bool IsWalkable(Point position)
+    {
+        // Outside the map is not a tile, so there is nothing to stand on.
+        if (!IsInBounds(position))
+        {
+            return false;
+        }
+
+        return _tiles[IndexOf(position)].IsWalkable;
+    }
+
+    // Row-major index; the single place the storage layout is expressed.
+    private int IndexOf(Point position)
+    {
+        return (position.Y * Width) + position.X;
+    }
+
+    // Shared guard for the two methods that have no sensible answer off the map.
+    private void RejectPositionOffTheMap(Point position, string parameterName)
+    {
+        // Reading or writing outside the map is a caller error, so fail where the mistake was made.
+        if (!IsInBounds(position))
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                position,
+                $"The position is outside the {Width}x{Height} map.");
+        }
+    }
+}
+```
 
 ## Step 2: add the five new files
 
@@ -1311,6 +1456,70 @@ public sealed class DungeonGeneratorTests
 
 Updated for Part 3: the hand-built room replaces MapFactory.
 
+<!-- generated-diff -->
+**Changed from Part 2.** The complete file follows; this is only what moved:
+
+```diff
+--- part-02-entities-and-the-map/MovementIntegrationTests.cs
++++ current/MovementIntegrationTests.cs
+@@ -14,6 +14,24 @@
+ 
+ public sealed class MovementIntegrationTests
+ {
++    // A hand-built walled room: solid rock with the interior carved out. Built here rather
++    // than generated so the expected pictures below stay fixed and readable.
++    private static GameMap WalledRoom(int width, int height)
++    {
++        GameMap room = new GameMap(width, height);
++        room.Fill(TileTypes.Wall);
++
++        for (int row = 1; row < height - 1; row++)
++        {
++            for (int col = 1; col < width - 1; col++)
++            {
++                room.SetTile(new Point(col, row), TileTypes.Floor);
++            }
++        }
++
++        return room;
++    }
++
+     // Walks an entity through a map one frame of key presses at a time, as the game loop does.
+     private static Point PositionAfter(GameMap map, Point start, IEnumerable<Keys[]> framesOfKeys)
+     {
+@@ -67,7 +85,7 @@
+     [Fact]
+     public void AWalledRoomHoldsThePlayerIn()
+     {
+-        GameMap room = MapFactory.CreateWalledRoom(9, 9);
++        GameMap room = WalledRoom(9, 9);
+ 
+         // Ten presses left from the interior's left edge; the border must stop every one.
+         List<Keys[]> tenPressesLeft = new List<Keys[]>();
+@@ -97,16 +115,16 @@
+     [Fact]
+     public void ThePlayerAppearsWhereTheMoveLeftIt()
+     {
+-        GameMap room = MapFactory.CreateWalledRoom(5, 5);
++        GameMap room = WalledRoom(5, 5);
+         Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
+ 
+         player.MoveTo(MovementRules.DestinationFor(player.Position, MovementKeys.OffsetFor(new[] { Keys.Right }), room));
+ 
+         // The frame is the end of the whole chain: key -> rule -> entity -> picture.
+-        // Row 2 holds both pillars: width/3 = 1 and (width*2)/3 = 3 on row height/2 = 2,
+-        // which on a 5-wide room leaves only the middle cell of that row open.
++        // A 5x5 room is one ring of wall around a 3x3 floor, and the player has stepped
++        // one cell right of the top-left interior corner.
+         Assert.Equal(
+-            string.Join("\n", "#####", "#.@.#", "##.##", "#...#", "#####"),
++            string.Join("\n", "#####", "#.@.#", "#...#", "#...#", "#####"),
+             FrameComposer.Compose(room, new[] { player }).ToText());
+     }
+ }
+```
+<!-- generated-diff -->
+
 ```csharp
 /*
  * Integration tests: the key table, the map and the movement rule composed, which is the path
@@ -1468,7 +1677,56 @@ with the version given above, which builds its room in the test file itself.
 
 ## Step 4: rewrite `RootScreen`
 
-**Replace the whole file.** [`RogueTutorial/RootScreen.cs`](../parts/part-03-dungeon-generation/RogueTutorial/RootScreen.cs), in full:
+### [`RogueTutorial/RootScreen.cs`](../parts/part-03-dungeon-generation/RogueTutorial/RootScreen.cs)
+
+The complete file - replace it rather than pasting pieces into the previous version.
+
+<!-- generated-diff -->
+**Changed from Part 2.** The complete file follows; this is only what moved:
+
+```diff
+--- part-02-entities-and-the-map/RootScreen.cs
++++ current/RootScreen.cs
+@@ -12,6 +12,7 @@
+  * size, and that requires a live graphics host. Test the rule classes instead.
+  */
+ 
++using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using SadConsole;
+@@ -46,13 +47,24 @@
+         // Children are drawn and updated by the base class once added.
+         Children.Add(_mapSurface);
+ 
+-        _map = MapFactory.CreateWalledRoom(_mapSurface.Surface.Width, _mapSurface.Surface.Height);
++        // No seed is given, so every run generates a different dungeon. Pass a number to
++        // Random's constructor to play the same one repeatedly while debugging.
++        DungeonGenerator generator = new DungeonGenerator(new DungeonSettings(
++            maximumRooms: 30,
++            minimumRoomSize: 6,
++            maximumRoomSize: 10));
+ 
+-        // Integer division floors, so an 80x25 room starts the player at (40, 12).
+-        _player = new Entity("Player", '@', Color.White, new Point(_map.Width / 2, _map.Height / 2));
++        GeneratedDungeon dungeon = generator.Generate(
++            _mapSurface.Surface.Width, _mapSurface.Surface.Height, new Random());
+ 
+-        // Two cells to the left of centre, which the room's proportions keep clear of a pillar.
+-        Entity villager = new Entity("Villager", '@', Color.Yellow, new Point((_map.Width / 2) - 2, _map.Height / 2));
++        _map = dungeon.Map;
++
++        // The generator decides where the player starts: the centre of the first room it placed.
++        _player = new Entity("Player", '@', Color.White, dungeon.PlayerStart);
++
++        // A villager in the last room, so there is a reason to walk the corridors.
++        Entity villager = new Entity(
++            "Villager", '@', Color.Yellow, dungeon.Rooms[dungeon.Rooms.Count - 1].Center);
+ 
+         // The player is last, so it covers anything standing on the same cell.
+         _entities = new List<Entity> { villager, _player };
+```
+<!-- generated-diff -->
 
 ```csharp
 /*

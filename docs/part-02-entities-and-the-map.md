@@ -1374,6 +1374,149 @@ public sealed class FrameComposerTests
 
 The whole chain: key press, movement rule, entity, picture. This replaces Part 1's version.
 
+<!-- generated-diff -->
+**Changed from Part 1.** The complete file follows; this is only what moved:
+
+```diff
+--- part-01-drawing-and-moving/MovementIntegrationTests.cs
++++ current/MovementIntegrationTests.cs
+@@ -1,7 +1,7 @@
+ /*
+- * Integration tests: the key table and the position rules composed, which is the path
+- * RootScreen.ProcessKeyboard actually walks. Unit tests cover each half; these cover the
+- * seam, where a sign convention or an axis swap would survive both halves being right.
++ * Integration tests: the key table, the map and the movement rule composed, which is the path
++ * RootScreen.ProcessKeyboard walks. Unit tests cover each piece; this level catches an axis
++ * swap or a wall consulted for the wrong cell, both of which survive every piece being right.
+  *
+  * Usage:  dotnet test --filter FullyQualifiedName~MovementIntegrationTests
+  */
+@@ -14,74 +14,99 @@
+ 
+ public sealed class MovementIntegrationTests
+ {
+-    // Applies a sequence of key presses one frame at a time, as the game loop would.
+-    private static Point PositionAfter(GridBounds bounds, Point start, IEnumerable<Keys[]> framesOfKeys)
++    // Walks an entity through a map one frame of key presses at a time, as the game loop does.
++    private static Point PositionAfter(GameMap map, Point start, IEnumerable<Keys[]> framesOfKeys)
+     {
+-        PlayerMover mover = new PlayerMover(bounds, start);
++        Entity walker = new Entity("Walker", '@', Color.White, start);
+ 
+         foreach (Keys[] keysThisFrame in framesOfKeys)
+         {
+-            mover.Move(MovementKeys.OffsetFor(keysThisFrame));
++            Point offset = MovementKeys.OffsetFor(keysThisFrame);
++
++            walker.MoveTo(MovementRules.DestinationFor(walker.Position, offset, map));
+         }
+ 
+-        return mover.Position;
++        return walker.Position;
+     }
+ 
+     [Fact]
+     public void PressingUpMovesTowardTheTopOfTheScreen()
+     {
+         // Y grows downward on a console grid, so "up" must decrease Y.
+-        Point result = PositionAfter(new GridBounds(80, 25), new Point(40, 12), new[] { new[] { Keys.Up } });
++        Point result = PositionAfter(new GameMap(9, 9), new Point(4, 4), new[] { new[] { Keys.Up } });
+ 
+-        Assert.Equal(new Point(40, 11), result);
++        Assert.Equal(new Point(4, 3), result);
+     }
+ 
+     [Fact]
+     public void FourFramesOfRightMoveFourCells()
+     {
+         Point result = PositionAfter(
+-            new GridBounds(80, 25),
+-            new Point(10, 10),
++            new GameMap(9, 9),
++            new Point(1, 1),
+             new[] { new[] { Keys.Right }, new[] { Keys.Right }, new[] { Keys.Right }, new[] { Keys.Right } });
+ 
+-        Assert.Equal(new Point(14, 10), result);
++        Assert.Equal(new Point(5, 1), result);
+     }
+ 
+     [Fact]
+-    public void HoldingAgainstTheLeftWallStopsRatherThanWrapping()
++    public void WalkingIntoAWallStopsWithoutSliding()
+     {
+-        // Ten presses from column 2 would reach -8 without the clamp.
++        GameMap map = new GameMap(9, 9);
++        map.SetTile(new Point(4, 3), TileTypes.Wall);
++
++        // Three presses up from (4,4): the first is refused, and so are the other two.
++        Point result = PositionAfter(
++            map,
++            new Point(4, 4),
++            new[] { new[] { Keys.Up }, new[] { Keys.Up }, new[] { Keys.Up } });
++
++        Assert.Equal(new Point(4, 4), result);
++    }
++
++    [Fact]
++    public void AWalledRoomHoldsThePlayerIn()
++    {
++        GameMap room = MapFactory.CreateWalledRoom(9, 9);
++
++        // Ten presses left from the interior's left edge; the border must stop every one.
+         List<Keys[]> tenPressesLeft = new List<Keys[]>();
+         for (int frame = 0; frame < 10; frame++)
+         {
+             tenPressesLeft.Add(new[] { Keys.Left });
+         }
+ 
+-        Point result = PositionAfter(new GridBounds(80, 25), new Point(2, 5), tenPressesLeft);
++        Point result = PositionAfter(room, new Point(2, 1), tenPressesLeft);
+ 
+-        Assert.Equal(new Point(0, 5), result);
++        Assert.Equal(new Point(1, 1), result);
++        Assert.True(room.IsWalkable(result));
+     }
+ 
+     [Fact]
+     public void AKeypadCornerReachesTheSameCellAsTwoCardinals()
+     {
+-        GridBounds bounds = new GridBounds(80, 25);
+-        Point start = new Point(40, 12);
++        GameMap map = new GameMap(9, 9);
++        Point start = new Point(4, 4);
+ 
+-        Point viaCorner = PositionAfter(bounds, start, new[] { new[] { Keys.NumPad7 } });
+-        Point viaCardinals = PositionAfter(bounds, start, new[] { new[] { Keys.Left, Keys.Up } });
++        Point viaCorner = PositionAfter(map, start, new[] { new[] { Keys.NumPad7 } });
++        Point viaCardinals = PositionAfter(map, start, new[] { new[] { Keys.Left, Keys.Up } });
+ 
+         Assert.Equal(viaCorner, viaCardinals);
+     }
+ 
+     [Fact]
+-    public void TheBottomRightCornerIsReachableAndIsTheLastCell()
++    public void ThePlayerAppearsWhereTheMoveLeftIt()
+     {
+-        GridBounds bounds = new GridBounds(80, 25);
++        GameMap room = MapFactory.CreateWalledRoom(5, 5);
++        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
+ 
+-        Point result = PositionAfter(bounds, new Point(40, 12), new[] { new[] { Keys.NumPad3 } , new[] { Keys.NumPad3 } });
++        player.MoveTo(MovementRules.DestinationFor(player.Position, MovementKeys.OffsetFor(new[] { Keys.Right }), room));
+ 
+-        Assert.Equal(new Point(42, 14), result);
+-        Assert.True(bounds.Contains(result));
++        // The frame is the end of the whole chain: key -> rule -> entity -> picture.
++        // Row 2 holds both pillars: width/3 = 1 and (width*2)/3 = 3 on row height/2 = 2,
++        // which on a 5-wide room leaves only the middle cell of that row open.
++        Assert.Equal(
++            string.Join("\n", "#####", "#.@.#", "##.##", "#...#", "#####"),
++            FrameComposer.Compose(room, new[] { player }).ToText());
+     }
+ }
+```
+<!-- generated-diff -->
+
 ```csharp
 /*
  * Integration tests: the key table, the map and the movement rule composed, which is the path
@@ -1682,7 +1825,152 @@ message showed the difference immediately - which is the red step doing its job.
 `PlayerMover` fields that no longer exist, and a partial paste leaves a class that references
 both and compiles as neither.
 
-[`RogueTutorial/RootScreen.cs`](../parts/part-02-entities-and-the-map/RogueTutorial/RootScreen.cs), in full:
+### [`RogueTutorial/RootScreen.cs`](../parts/part-02-entities-and-the-map/RogueTutorial/RootScreen.cs)
+
+The complete file - replace it rather than pasting pieces into the previous version.
+
+<!-- generated-diff -->
+**Changed from Part 1.** The complete file follows; this is only what moved:
+
+```diff
+--- part-01-drawing-and-moving/RootScreen.cs
++++ current/RootScreen.cs
+@@ -1,15 +1,15 @@
+ /*
+- * The top-level screen: it wires SadConsole's window and keyboard to the movement rules,
+- * and owns the drawing surface. All movement logic lives in PlayerMover and MovementKeys,
+- * which have no dependency on a running game and are unit tested.
++ * The top-level screen: it wires SadConsole's window and keyboard to the game, and blits the
++ * composed frame. It owns no rules. The map, the entities, where a move ends up and what the
++ * picture should look like are all decided by classes that run without a graphics host.
+  *
+  * Usage - SadConsole constructs this itself, because Program.cs named it as the starting
+  * screen, so it needs a public parameterless constructor:
+  *
+  *     new Builder().SetStartingScreen<RootScreen>()
+  *
+- * Constructing it in a test process throws: the constructor reads Game.Instance for the
+- * grid size, and that requires a live graphics host. Test the movement classes instead.
++ * Constructing it in a test process throws: the constructor reads Game.Instance for the grid
++ * size, and that requires a live graphics host. Test the rule classes instead.
+  */
+ 
+ using System.Collections.Generic;
+@@ -22,18 +22,21 @@
+ 
+ internal sealed class RootScreen : ScreenObject
+ {
+-    // The character drawn for the player. '@' is the roguelike convention for "you".
+-    private const char PlayerGlyph = '@';
+-
+     // The surface every glyph is drawn onto. One cell per grid position.
+     private readonly ScreenSurface _mapSurface;
+ 
+-    // Holds the player's position and enforces that it stays on the grid.
+-    private readonly PlayerMover _playerMover;
++    // The dungeon floor. Fixed for this part; generated for real in Part 3.
++    private readonly GameMap _map;
++
++    // Everything drawn on top of the map, in draw order: later entries cover earlier ones.
++    private readonly List<Entity> _entities;
++
++    // The entity the keyboard drives. Also present in _entities, so it is drawn like any other.
++    private readonly Entity _player;
+ 
+     /// <summary>
+-    /// Creates the drawing surface at the size configured in Program.cs and places the
+-    /// player at the centre of the grid, rounded down on an odd dimension.
++    /// Builds the room, places the player and one villager in it, and paints the first frame.
++    /// The surface is sized to the window configured in Program.cs.
+     /// </summary>
+     public RootScreen()
+     {
+@@ -43,21 +46,24 @@
+         // Children are drawn and updated by the base class once added.
+         Children.Add(_mapSurface);
+ 
+-        GridBounds bounds = new GridBounds(_mapSurface.Surface.Width, _mapSurface.Surface.Height);
++        _map = MapFactory.CreateWalledRoom(_mapSurface.Surface.Width, _mapSurface.Surface.Height);
+ 
+-        // Integer division floors, so an 80x25 grid starts the player at (40, 12).
+-        Point startingPosition = new Point(bounds.Width / 2, bounds.Height / 2);
++        // Integer division floors, so an 80x25 room starts the player at (40, 12).
++        _player = new Entity("Player", '@', Color.White, new Point(_map.Width / 2, _map.Height / 2));
+ 
+-        _playerMover = new PlayerMover(bounds, startingPosition);
++        // Two cells to the left of centre, which the room's proportions keep clear of a pillar.
++        Entity villager = new Entity("Villager", '@', Color.Yellow, new Point((_map.Width / 2) - 2, _map.Height / 2));
+ 
+-        // Nothing has been drawn yet, so paint the first frame.
++        // The player is last, so it covers anything standing on the same cell.
++        _entities = new List<Entity> { villager, _player };
++
+         DrawFrame();
+     }
+ 
+     /// <summary>
+-    /// Turns the keys held this frame into one move. Returns true when the player actually
+-    /// moved, which tells SadConsole the input was consumed; a non-movement key returns
+-    /// false so other screens still see it.
++    /// Turns the keys held this frame into one move for the player. Returns true when a
++    /// movement key was pressed, even if a wall refused the move, so the key is not offered
++    /// to another screen as though nothing had happened.
+     /// </summary>
+     public override bool ProcessKeyboard(Keyboard keyboard)
+     {
+@@ -72,14 +78,12 @@
+             return false;
+         }
+ 
+-        // Remember where the player was, so a move blocked by a wall does not force a repaint.
+-        Point positionBeforeMove = _playerMover.Position;
++        Point destination = MovementRules.DestinationFor(_player.Position, moveOffset, _map);
+ 
+-        _playerMover.Move(moveOffset);
+-
+-        // Redrawing only on a real change keeps the wall case free of pointless work.
+-        if (_playerMover.Position != positionBeforeMove)
++        // A wall refuses the move, and repainting an unchanged frame is wasted work.
++        if (destination != _player.Position)
+         {
++            _player.MoveTo(destination);
+             DrawFrame();
+         }
+ 
+@@ -87,19 +91,21 @@
+     }
+ 
+     /// <summary>
+-    /// Repaints the whole surface: a blank grid with the player's glyph on it. Clearing
+-    /// every cell is what erases the glyph's previous position.
++    /// Composes the picture and copies it onto the surface, one cell at a time. Everything
++    /// decided here was already decided by FrameComposer; this only moves it to the screen.
+     /// </summary>
+     private void DrawFrame()
+     {
+-        // Wipe the previous frame; without this the player leaves a trail.
+-        _mapSurface.Surface.Clear();
++        RenderedFrame frame = FrameComposer.Compose(_map, _entities);
+ 
+-        // Draw the player last so it sits on top of anything drawn before it.
+-        _mapSurface.Surface.SetGlyph(
+-            _playerMover.Position.X,
+-            _playerMover.Position.Y,
+-            PlayerGlyph,
+-            Color.White);
++        for (int row = 0; row < frame.Height; row++)
++        {
++            for (int col = 0; col < frame.Width; col++)
++            {
++                Point cell = new Point(col, row);
++
++                _mapSurface.Surface.SetGlyph(col, row, frame.GlyphAt(cell), frame.ForegroundAt(cell));
++            }
++        }
+     }
+ }
+```
+<!-- generated-diff -->
 
 ```csharp
 /*

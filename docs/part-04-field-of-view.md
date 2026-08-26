@@ -582,6 +582,102 @@ internal sealed class VisibilityMap
 
 The Part 2 file with one overload added: the same drawing, filtered through what the player knows.
 
+<!-- generated-diff -->
+**Changed from Part 3.** The complete file follows; this is only what moved:
+
+```diff
+--- part-03-dungeon-generation/FrameComposer.cs
++++ current/FrameComposer.cs
+@@ -8,6 +8,9 @@
+  *     RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
+  *     string picture = frame.ToText();
+  *     // -> "...\n.@."
++ *
++ * The overload taking a VisibilityMap is what the game uses from Part 4 on: it dims what the
++ * player remembers, blanks what they have never seen, and hides entities standing in the dark.
+  *
+  * Refuses a null map or null entity list. An entity standing off the map is skipped rather than
+  * throwing, because a later part moves entities between levels.
+@@ -25,6 +28,76 @@
+     /// Draws every map tile, then every entity over the top in list order, so a later entity
+     /// covers an earlier one sharing its cell. Throws ArgumentNullException on a null argument.
+     /// </summary>
++    /// <summary>
++    /// Draws the map and entities as the player currently perceives them: cells in sight at full
++    /// colour, cells only remembered dimmed, cells never seen left blank, and entities drawn only
++    /// where the player can actually see them. Throws ArgumentNullException on a null argument.
++    /// </summary>
++    public static RenderedFrame Compose(GameMap map, IReadOnlyList<Entity> entities, VisibilityMap visibility)
++    {
++        ArgumentNullException.ThrowIfNull(map);
++        ArgumentNullException.ThrowIfNull(entities);
++        ArgumentNullException.ThrowIfNull(visibility);
++
++        char[] glyphs = new char[map.Width * map.Height];
++        Color[] foregrounds = new Color[map.Width * map.Height];
++
++        for (int row = 0; row < map.Height; row++)
++        {
++            for (int col = 0; col < map.Width; col++)
++            {
++                Point cell = new Point(col, row);
++                int index = (row * map.Width) + col;
++
++                CellVisibility state = visibility.StateAt(cell);
++
++                // Never seen: nothing is drawn, so unexplored dungeon reads as empty space.
++                if (state == CellVisibility.Unseen)
++                {
++                    glyphs[index] = ' ';
++                    foregrounds[index] = Color.Black;
++                    continue;
++                }
++
++                Tile tile = map.GetTile(cell);
++
++                glyphs[index] = tile.Glyph;
++
++                // Remembered cells are drawn from memory, so they are dimmed rather than lit.
++                foregrounds[index] = state == CellVisibility.Visible
++                    ? tile.Foreground
++                    : DimmedForMemory(tile.Foreground);
++            }
++        }
++
++        foreach (Entity entity in entities)
++        {
++            if (!map.IsInBounds(entity.Position))
++            {
++                continue;
++            }
++
++            // Creatures are not remembered: an entity is drawn only where it can be seen now,
++            // otherwise the player would watch a monster that had long since walked away.
++            if (visibility.StateAt(entity.Position) != CellVisibility.Visible)
++            {
++                continue;
++            }
++
++            int index = (entity.Position.Y * map.Width) + entity.Position.X;
++            glyphs[index] = entity.Glyph;
++            foregrounds[index] = entity.Foreground;
++        }
++
++        return new RenderedFrame(map.Width, map.Height, glyphs, foregrounds);
++    }
++
++    // A third of full brightness: dark enough to read as memory, light enough to make out.
++    private static Color DimmedForMemory(Color lit)
++    {
++        return new Color(lit.R / 3, lit.G / 3, lit.B / 3);
++    }
++
+     public static RenderedFrame Compose(GameMap map, IReadOnlyList<Entity> entities)
+     {
+         ArgumentNullException.ThrowIfNull(map);
+```
+<!-- generated-diff -->
+
 ```csharp
 /*
  * Builds the picture that should be on screen: the map first, then entities over the top.
@@ -726,6 +822,37 @@ internal static class FrameComposer
 ### [`RogueTutorial/GameMap.cs`](../parts/part-04-field-of-view/RogueTutorial/GameMap.cs)
 
 The Part 3 file with `IsTransparent` added.
+
+<!-- generated-diff -->
+**Changed from Part 3.** The complete file follows; this is only what moved:
+
+```diff
+--- part-03-dungeon-generation/GameMap.cs
++++ current/GameMap.cs
+@@ -105,6 +105,21 @@
+         return _tiles[IndexOf(position)].IsWalkable;
+     }
+ 
++    /// <summary>
++    /// True when sight passes through the position. Anything off the map answers false, so
++    /// field-of-view code can ask about the cell beyond the edge without a bounds check.
++    /// </summary>
++    public bool IsTransparent(Point position)
++    {
++        // Outside the map is solid rock as far as sight is concerned.
++        if (!IsInBounds(position))
++        {
++            return false;
++        }
++
++        return _tiles[IndexOf(position)].IsTransparent;
++    }
++
+     // Row-major index; the single place the storage layout is expressed.
+     private int IndexOf(Point position)
+     {
+```
+<!-- generated-diff -->
 
 ```csharp
 /*
@@ -874,6 +1001,90 @@ internal sealed class GameMap
 ### [`RogueTutorial/RootScreen.cs`](../parts/part-04-field-of-view/RogueTutorial/RootScreen.cs)
 
 Recomputes sight after every move that changed the player's position.
+
+<!-- generated-diff -->
+**Changed from Part 3.** The complete file follows; this is only what moved:
+
+```diff
+--- part-03-dungeon-generation/RootScreen.cs
++++ current/RootScreen.cs
+@@ -1,6 +1,7 @@
+ /*
+  * The top-level screen: it wires SadConsole's window and keyboard to the game, and blits the
+- * composed frame. It owns no rules. The map, the entities, where a move ends up and what the
++ * composed frame. It owns no rules. From Part 4 it also recomputes the player's field of view
++ * after every move, so the map is drawn as the player perceives it rather than as it is. The map, the entities, where a move ends up and what the
+  * picture should look like are all decided by classes that run without a graphics host.
+  *
+  * Usage - SadConsole constructs this itself, because Program.cs named it as the starting
+@@ -23,6 +24,10 @@
+ 
+ internal sealed class RootScreen : ScreenObject
+ {
++    // How far the player can see, in cells. Large enough to take in a room, small enough that
++    // a corridor stays dark ahead of you.
++    private const int PlayerSightRadius = 8;
++
+     // The surface every glyph is drawn onto. One cell per grid position.
+     private readonly ScreenSurface _mapSurface;
+ 
+@@ -31,6 +36,9 @@
+ 
+     // Everything drawn on top of the map, in draw order: later entries cover earlier ones.
+     private readonly List<Entity> _entities;
++
++    // What the player can see now and what they remember, updated after every move.
++    private readonly VisibilityMap _visibility;
+ 
+     // The entity the keyboard drives. Also present in _entities, so it is drawn like any other.
+     private readonly Entity _player;
+@@ -69,6 +77,12 @@
+         // The player is last, so it covers anything standing on the same cell.
+         _entities = new List<Entity> { villager, _player };
+ 
++        _visibility = new VisibilityMap(_map.Width, _map.Height);
++
++        // Without this the first frame would be drawn before anything had been seen, so the
++        // player would spend one frame staring at an entirely blank screen.
++        RecomputeFieldOfView();
++
+         DrawFrame();
+     }
+ 
+@@ -96,6 +110,11 @@
+         if (destination != _player.Position)
+         {
+             _player.MoveTo(destination);
++
++            // Sight is recomputed from the new position before the frame is drawn, or the
++            // player would see one frame of the view from where they used to stand.
++            RecomputeFieldOfView();
++
+             DrawFrame();
+         }
+ 
+@@ -106,9 +125,18 @@
+     /// Composes the picture and copies it onto the surface, one cell at a time. Everything
+     /// decided here was already decided by FrameComposer; this only moves it to the screen.
+     /// </summary>
++    /// <summary>
++    /// Works out what the player can see from where they now stand and folds it into what they
++    /// remember. Called once at construction and after every move that changed the position.
++    /// </summary>
++    private void RecomputeFieldOfView()
++    {
++        _visibility.Update(FieldOfView.From(_player.Position, PlayerSightRadius, _map));
++    }
++
+     private void DrawFrame()
+     {
+-        RenderedFrame frame = FrameComposer.Compose(_map, _entities);
++        RenderedFrame frame = FrameComposer.Compose(_map, _entities, _visibility);
+ 
+         for (int row = 0; row < frame.Height; row++)
+         {
+```
+<!-- generated-diff -->
 
 ```csharp
 /*

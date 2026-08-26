@@ -687,6 +687,58 @@ internal sealed class MonsterTable
 
 The Part 2 file with `BlocksMovement` added.
 
+<!-- generated-diff -->
+**Changed from Part 4.** The complete file follows; this is only what moved:
+
+```diff
+--- part-04-field-of-view/Entity.cs
++++ current/Entity.cs
+@@ -4,10 +4,14 @@
+  *
+  * Usage:
+  *
+- *     Entity player = new Entity("Player", '@', Color.White, new Point(40, 12));
+- *     Entity npc = new Entity("Villager", '@', Color.Yellow, new Point(42, 12));
++ *     Entity player = new Entity("Player", '@', Color.White, new Point(40, 12), blocksMovement: true);
++ *     Entity corpse = new Entity("Corpse", '%', Color.Red, new Point(41, 12), blocksMovement: false);
+  *     player.MoveTo(new Point(41, 12));   // unconditional; see MovementRules for the rules
+  *     string who = player.Name;           // -> "Player", for messages in a later part
++ *
++ * blocksMovement is explicit at every call: a creature occupies its cell and nothing else may
++ * stand there, while an item on the floor is walked over. There is no default, because guessing
++ * wrong is silent - you notice when a player walks through a monster.
+  *
+  * Refuses a null, empty or whitespace name. It applies no movement rules of its own: whether a
+  * destination is legal is the map's business, and MovementRules is where the two meet.
+@@ -33,10 +37,16 @@
+     public Point Position { get; private set; }
+ 
+     /// <summary>
++    /// True when nothing else may stand on this entity's cell. Creatures block; items lying on
++    /// the floor do not.
++    /// </summary>
++    public bool BlocksMovement { get; }
++
++    /// <summary>
+     /// Creates an entity at a starting cell. Throws ArgumentException on a blank name, since an
+     /// unnamed entity would surface much later as an empty word in a message.
+     /// </summary>
+-    public Entity(string name, char glyph, Color foreground, Point startingPosition)
++    public Entity(string name, char glyph, Color foreground, Point startingPosition, bool blocksMovement)
+     {
+         // A blank name is a construction mistake; fail here rather than in the message log.
+         if (string.IsNullOrWhiteSpace(name))
+@@ -48,6 +58,7 @@
+         Glyph = glyph;
+         Foreground = foreground;
+         Position = startingPosition;
++        BlocksMovement = blocksMovement;
+     }
+ 
+     /// <summary>
+```
+<!-- generated-diff -->
+
 ```csharp
 /*
  * Anything that occupies one cell and is drawn on top of the map: the player, a monster,
@@ -762,9 +814,331 @@ internal sealed class Entity
 }
 ```
 
+### [`RogueTutorial/FrameComposer.cs`](../parts/part-05-placing-monsters/RogueTutorial/FrameComposer.cs)
+
+Unchanged apart from its usage block, which now shows the required `blocksMovement` argument.
+
+<!-- generated-diff -->
+**Changed from Part 4.** The complete file follows; this is only what moved:
+
+```diff
+--- part-04-field-of-view/FrameComposer.cs
++++ current/FrameComposer.cs
+@@ -4,7 +4,7 @@
+  * Usage:
+  *
+  *     GameMap map = new GameMap(3, 2);
+- *     Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
++ *     Entity player = new Entity("Player", '@', Color.White, new Point(1, 1), blocksMovement: true);
+  *     RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
+  *     string picture = frame.ToText();
+  *     // -> "...\n.@."
+```
+<!-- generated-diff -->
+
+```csharp
+/*
+ * Builds the picture that should be on screen: the map first, then entities over the top.
+ *
+ * Usage:
+ *
+ *     GameMap map = new GameMap(3, 2);
+ *     Entity player = new Entity("Player", '@', Color.White, new Point(1, 1), blocksMovement: true);
+ *     RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
+ *     string picture = frame.ToText();
+ *     // -> "...\n.@."
+ *
+ * The overload taking a VisibilityMap is what the game uses from Part 4 on: it dims what the
+ * player remembers, blanks what they have never seen, and hides entities standing in the dark.
+ *
+ * Refuses a null map or null entity list. An entity standing off the map is skipped rather than
+ * throwing, because a later part moves entities between levels.
+ */
+
+using System;
+using System.Collections.Generic;
+using SadRogue.Primitives;
+
+namespace RogueTutorial;
+
+internal static class FrameComposer
+{
+    /// <summary>
+    /// Draws every map tile, then every entity over the top in list order, so a later entity
+    /// covers an earlier one sharing its cell. Throws ArgumentNullException on a null argument.
+    /// </summary>
+    /// <summary>
+    /// Draws the map and entities as the player currently perceives them: cells in sight at full
+    /// colour, cells only remembered dimmed, cells never seen left blank, and entities drawn only
+    /// where the player can actually see them. Throws ArgumentNullException on a null argument.
+    /// </summary>
+    public static RenderedFrame Compose(GameMap map, IReadOnlyList<Entity> entities, VisibilityMap visibility)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(entities);
+        ArgumentNullException.ThrowIfNull(visibility);
+
+        char[] glyphs = new char[map.Width * map.Height];
+        Color[] foregrounds = new Color[map.Width * map.Height];
+
+        for (int row = 0; row < map.Height; row++)
+        {
+            for (int col = 0; col < map.Width; col++)
+            {
+                Point cell = new Point(col, row);
+                int index = (row * map.Width) + col;
+
+                CellVisibility state = visibility.StateAt(cell);
+
+                // Never seen: nothing is drawn, so unexplored dungeon reads as empty space.
+                if (state == CellVisibility.Unseen)
+                {
+                    glyphs[index] = ' ';
+                    foregrounds[index] = Color.Black;
+                    continue;
+                }
+
+                Tile tile = map.GetTile(cell);
+
+                glyphs[index] = tile.Glyph;
+
+                // Remembered cells are drawn from memory, so they are dimmed rather than lit.
+                foregrounds[index] = state == CellVisibility.Visible
+                    ? tile.Foreground
+                    : DimmedForMemory(tile.Foreground);
+            }
+        }
+
+        foreach (Entity entity in entities)
+        {
+            if (!map.IsInBounds(entity.Position))
+            {
+                continue;
+            }
+
+            // Creatures are not remembered: an entity is drawn only where it can be seen now,
+            // otherwise the player would watch a monster that had long since walked away.
+            if (visibility.StateAt(entity.Position) != CellVisibility.Visible)
+            {
+                continue;
+            }
+
+            int index = (entity.Position.Y * map.Width) + entity.Position.X;
+            glyphs[index] = entity.Glyph;
+            foregrounds[index] = entity.Foreground;
+        }
+
+        return new RenderedFrame(map.Width, map.Height, glyphs, foregrounds);
+    }
+
+    // A third of full brightness: dark enough to read as memory, light enough to make out.
+    private static Color DimmedForMemory(Color lit)
+    {
+        return new Color(lit.R / 3, lit.G / 3, lit.B / 3);
+    }
+
+    public static RenderedFrame Compose(GameMap map, IReadOnlyList<Entity> entities)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(entities);
+
+        char[] glyphs = new char[map.Width * map.Height];
+        Color[] foregrounds = new Color[map.Width * map.Height];
+
+        // The map is the background layer, so it goes down first and entities paint over it.
+        for (int row = 0; row < map.Height; row++)
+        {
+            for (int col = 0; col < map.Width; col++)
+            {
+                Tile tile = map.GetTile(new Point(col, row));
+
+                int index = (row * map.Width) + col;
+                glyphs[index] = tile.Glyph;
+                foregrounds[index] = tile.Foreground;
+            }
+        }
+
+        // List order decides who covers whom, so this loop must not be reordered.
+        foreach (Entity entity in entities)
+        {
+            // An entity between levels is legitimately off this map, so skip rather than throw.
+            if (!map.IsInBounds(entity.Position))
+            {
+                continue;
+            }
+
+            int index = (entity.Position.Y * map.Width) + entity.Position.X;
+            glyphs[index] = entity.Glyph;
+            foregrounds[index] = entity.Foreground;
+        }
+
+        return new RenderedFrame(map.Width, map.Height, glyphs, foregrounds);
+    }
+}
+```
+
 ### [`RogueTutorial/RootScreen.cs`](../parts/part-05-placing-monsters/RogueTutorial/RootScreen.cs)
 
 Now wiring and drawing only - it owns no state at all.
+
+<!-- generated-diff -->
+**Changed from Part 4.** The complete file follows; this is only what moved:
+
+```diff
+--- part-04-field-of-view/RootScreen.cs
++++ current/RootScreen.cs
+@@ -1,8 +1,8 @@
+ /*
+- * The top-level screen: it wires SadConsole's window and keyboard to the game, and blits the
+- * composed frame. It owns no rules. From Part 4 it also recomputes the player's field of view
+- * after every move, so the map is drawn as the player perceives it rather than as it is. The map, the entities, where a move ends up and what the
+- * picture should look like are all decided by classes that run without a graphics host.
++ * The top-level screen: it wires SadConsole's window and keyboard to the game world, and blits
++ * the frame the world composes. It owns no rules and, from Part 5, no state either - the map,
++ * the entities and what the player has seen all live on GameWorld, which can be built and
++ * driven in a test process.
+  *
+  * Usage - SadConsole constructs this itself, because Program.cs named it as the starting
+  * screen, so it needs a public parameterless constructor:
+@@ -10,7 +10,7 @@
+  *     new Builder().SetStartingScreen<RootScreen>()
+  *
+  * Constructing it in a test process throws: the constructor reads Game.Instance for the grid
+- * size, and that requires a live graphics host. Test the rule classes instead.
++ * size, and that requires a live graphics host. Test GameWorld instead.
+  */
+ 
+ using System;
+@@ -24,28 +24,14 @@
+ 
+ internal sealed class RootScreen : ScreenObject
+ {
+-    // How far the player can see, in cells. Large enough to take in a room, small enough that
+-    // a corridor stays dark ahead of you.
+-    private const int PlayerSightRadius = 8;
+-
+     // The surface every glyph is drawn onto. One cell per grid position.
+     private readonly ScreenSurface _mapSurface;
+ 
+-    // The dungeon floor. Fixed for this part; generated for real in Part 3.
+-    private readonly GameMap _map;
+-
+-    // Everything drawn on top of the map, in draw order: later entries cover earlier ones.
+-    private readonly List<Entity> _entities;
+-
+-    // What the player can see now and what they remember, updated after every move.
+-    private readonly VisibilityMap _visibility;
+-
+-    // The entity the keyboard drives. Also present in _entities, so it is drawn like any other.
+-    private readonly Entity _player;
++    // The dungeon, everyone standing in it, and what the player has seen.
++    private readonly GameWorld _world;
+ 
+     /// <summary>
+-    /// Builds the room, places the player and one villager in it, and paints the first frame.
+-    /// The surface is sized to the window configured in Program.cs.
++    /// Sizes the surface to the window, generates a world to fill it, and paints the first frame.
+     /// </summary>
+     public RootScreen()
+     {
+@@ -55,41 +41,18 @@
+         // Children are drawn and updated by the base class once added.
+         Children.Add(_mapSurface);
+ 
+-        // No seed is given, so every run generates a different dungeon. Pass a number to
+-        // Random's constructor to play the same one repeatedly while debugging.
+-        DungeonGenerator generator = new DungeonGenerator(new DungeonSettings(
+-            maximumRooms: 30,
+-            minimumRoomSize: 6,
+-            maximumRoomSize: 10));
+-
+-        GeneratedDungeon dungeon = generator.Generate(
+-            _mapSurface.Surface.Width, _mapSurface.Surface.Height, new Random());
+-
+-        _map = dungeon.Map;
+-
+-        // The generator decides where the player starts: the centre of the first room it placed.
+-        _player = new Entity("Player", '@', Color.White, dungeon.PlayerStart);
+-
+-        // A villager in the last room, so there is a reason to walk the corridors.
+-        Entity villager = new Entity(
+-            "Villager", '@', Color.Yellow, dungeon.Rooms[dungeon.Rooms.Count - 1].Center);
+-
+-        // The player is last, so it covers anything standing on the same cell.
+-        _entities = new List<Entity> { villager, _player };
+-
+-        _visibility = new VisibilityMap(_map.Width, _map.Height);
+-
+-        // Without this the first frame would be drawn before anything had been seen, so the
+-        // player would spend one frame staring at an entirely blank screen.
+-        RecomputeFieldOfView();
++        // No seed is given, so every run is a different dungeon with different monsters. Pass a
++        // number to Random's constructor to play the same one repeatedly while debugging.
++        _world = GameWorld.Generate(
++            _mapSurface.Surface.Width, _mapSurface.Surface.Height, new Random(), MonsterTable.Standard);
+ 
+         DrawFrame();
+     }
+ 
+     /// <summary>
+-    /// Turns the keys held this frame into one move for the player. Returns true when a
+-    /// movement key was pressed, even if a wall refused the move, so the key is not offered
+-    /// to another screen as though nothing had happened.
++    /// Turns the keys held this frame into one move. Returns true whenever a movement key was
++    /// pressed, even when a wall or a monster refused the move: the key was considered and
++    /// answered, and reporting otherwise would offer it to another screen as unhandled.
+     /// </summary>
+     public override bool ProcessKeyboard(Keyboard keyboard)
+     {
+@@ -104,17 +67,12 @@
+             return false;
+         }
+ 
+-        Point destination = MovementRules.DestinationFor(_player.Position, moveOffset, _map);
++        PlayerAction action = _world.MovePlayer(moveOffset);
+ 
+-        // A wall refuses the move, and repainting an unchanged frame is wasted work.
+-        if (destination != _player.Position)
++        // Only a move changes the picture. A bump will change it in Part 6, once attacking does
++        // something; a wall never does.
++        if (action.Kind == PlayerActionKind.Moved)
+         {
+-            _player.MoveTo(destination);
+-
+-            // Sight is recomputed from the new position before the frame is drawn, or the
+-            // player would see one frame of the view from where they used to stand.
+-            RecomputeFieldOfView();
+-
+             DrawFrame();
+         }
+ 
+@@ -122,21 +80,12 @@
+     }
+ 
+     /// <summary>
+-    /// Composes the picture and copies it onto the surface, one cell at a time. Everything
+-    /// decided here was already decided by FrameComposer; this only moves it to the screen.
++    /// Copies the world's composed frame onto the surface, one cell at a time. Everything drawn
++    /// here was already decided by FrameComposer; this only moves it to the screen.
+     /// </summary>
+-    /// <summary>
+-    /// Works out what the player can see from where they now stand and folds it into what they
+-    /// remember. Called once at construction and after every move that changed the position.
+-    /// </summary>
+-    private void RecomputeFieldOfView()
+-    {
+-        _visibility.Update(FieldOfView.From(_player.Position, PlayerSightRadius, _map));
+-    }
+-
+     private void DrawFrame()
+     {
+-        RenderedFrame frame = FrameComposer.Compose(_map, _entities, _visibility);
++        RenderedFrame frame = _world.ComposeFrame();
+ 
+         for (int row = 0; row < frame.Height; row++)
+         {
+```
+<!-- generated-diff -->
 
 ```csharp
 /*
@@ -1417,6 +1791,64 @@ public sealed class MonsterTableTests
 
 Part 2's file, with `blocksMovement: true` on every construction.
 
+<!-- generated-diff -->
+**Changed from Part 4.** The complete file follows; this is only what moved:
+
+```diff
+--- part-04-field-of-view/FrameComposerTests.cs
++++ current/FrameComposerTests.cs
+@@ -55,7 +55,7 @@
+     public void AnEntityDrawsOverTheMap()
+     {
+         GameMap map = new GameMap(3, 2);
+-        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
++        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1), blocksMovement: true);
+ 
+         RenderedFrame frame = FrameComposer.Compose(map, new[] { player });
+ 
+@@ -70,8 +70,8 @@
+     public void SeveralEntitiesAllDraw()
+     {
+         GameMap map = new GameMap(4, 2);
+-        Entity player = new Entity("Player", '@', Color.White, new Point(0, 0));
+-        Entity villager = new Entity("Villager", 'V', Color.Yellow, new Point(3, 1));
++        Entity player = new Entity("Player", '@', Color.White, new Point(0, 0), blocksMovement: true);
++        Entity villager = new Entity("Villager", 'V', Color.Yellow, new Point(3, 1), blocksMovement: true);
+ 
+         RenderedFrame frame = FrameComposer.Compose(map, new[] { player, villager });
+ 
+@@ -86,8 +86,8 @@
+     public void ALaterEntityCoversAnEarlierOneOnTheSameCell()
+     {
+         GameMap map = new GameMap(2, 1);
+-        Entity underneath = new Entity("Corpse", '%', Color.Red, new Point(0, 0));
+-        Entity onTop = new Entity("Player", '@', Color.White, new Point(0, 0));
++        Entity underneath = new Entity("Corpse", '%', Color.Red, new Point(0, 0), blocksMovement: false);
++        Entity onTop = new Entity("Player", '@', Color.White, new Point(0, 0), blocksMovement: true);
+ 
+         RenderedFrame frame = FrameComposer.Compose(map, new[] { underneath, onTop });
+ 
+@@ -98,7 +98,7 @@
+     public void AnEntityOffTheMapIsSkippedRatherThanThrowing()
+     {
+         GameMap map = new GameMap(2, 1);
+-        Entity stray = new Entity("Stray", 'S', Color.Green, new Point(9, 9));
++        Entity stray = new Entity("Stray", 'S', Color.Green, new Point(9, 9), blocksMovement: true);
+ 
+         RenderedFrame frame = FrameComposer.Compose(map, new[] { stray });
+ 
+@@ -109,7 +109,7 @@
+     public void TheEntityColourReachesTheFrame()
+     {
+         GameMap map = new GameMap(2, 1);
+-        Entity villager = new Entity("Villager", 'V', Color.Yellow, new Point(1, 0));
++        Entity villager = new Entity("Villager", 'V', Color.Yellow, new Point(1, 0), blocksMovement: true);
+ 
+         RenderedFrame frame = FrameComposer.Compose(map, new[] { villager });
+ 
+```
+<!-- generated-diff -->
+
 ```csharp
 /*
  * Unit tests for what should appear on screen. These are the tests Part 1 could not have:
@@ -1565,6 +1997,42 @@ public sealed class FrameComposerTests
 ### [`RogueTutorial.Tests/FrameComposerVisibilityTests.cs`](../parts/part-05-placing-monsters/RogueTutorial.Tests/FrameComposerVisibilityTests.cs)
 
 Part 4's file, likewise.
+
+<!-- generated-diff -->
+**Changed from Part 4.** The complete file follows; this is only what moved:
+
+```diff
+--- part-04-field-of-view/FrameComposerVisibilityTests.cs
++++ current/FrameComposerVisibilityTests.cs
+@@ -100,7 +100,7 @@
+     {
+         GameMap map = OpenMap(3, 1);
+         VisibilityMap visibility = new VisibilityMap(3, 1);
+-        Entity player = new Entity("Player", '@', Color.White, new Point(1, 0));
++        Entity player = new Entity("Player", '@', Color.White, new Point(1, 0), blocksMovement: true);
+ 
+         visibility.Update(Cells(new Point(0, 0), new Point(1, 0), new Point(2, 0)));
+ 
+@@ -116,7 +116,7 @@
+         // where you last saw it, or the player chases a ghost.
+         GameMap map = OpenMap(4, 1);
+         VisibilityMap visibility = new VisibilityMap(4, 1);
+-        Entity monster = new Entity("Rat", 'r', Color.Red, new Point(0, 0));
++        Entity monster = new Entity("Rat", 'r', Color.Red, new Point(0, 0), blocksMovement: true);
+ 
+         visibility.Update(Cells(new Point(0, 0)));
+         visibility.Update(Cells(new Point(3, 0)));
+@@ -132,7 +132,7 @@
+     {
+         GameMap map = OpenMap(3, 1);
+         VisibilityMap visibility = new VisibilityMap(3, 1);
+-        Entity monster = new Entity("Rat", 'r', Color.Red, new Point(2, 0));
++        Entity monster = new Entity("Rat", 'r', Color.Red, new Point(2, 0), blocksMovement: true);
+ 
+         visibility.Update(Cells(new Point(0, 0)));
+ 
+```
+<!-- generated-diff -->
 
 ```csharp
 /*
@@ -1736,6 +2204,33 @@ public sealed class FrameComposerVisibilityTests
 ### [`RogueTutorial.Tests/MovementIntegrationTests.cs`](../parts/part-05-placing-monsters/RogueTutorial.Tests/MovementIntegrationTests.cs)
 
 Part 3's file, likewise.
+
+<!-- generated-diff -->
+**Changed from Part 4.** The complete file follows; this is only what moved:
+
+```diff
+--- part-04-field-of-view/MovementIntegrationTests.cs
++++ current/MovementIntegrationTests.cs
+@@ -35,7 +35,7 @@
+     // Walks an entity through a map one frame of key presses at a time, as the game loop does.
+     private static Point PositionAfter(GameMap map, Point start, IEnumerable<Keys[]> framesOfKeys)
+     {
+-        Entity walker = new Entity("Walker", '@', Color.White, start);
++        Entity walker = new Entity("Walker", '@', Color.White, start, blocksMovement: true);
+ 
+         foreach (Keys[] keysThisFrame in framesOfKeys)
+         {
+@@ -116,7 +116,7 @@
+     public void ThePlayerAppearsWhereTheMoveLeftIt()
+     {
+         GameMap room = WalledRoom(5, 5);
+-        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1));
++        Entity player = new Entity("Player", '@', Color.White, new Point(1, 1), blocksMovement: true);
+ 
+         player.MoveTo(MovementRules.DestinationFor(player.Position, MovementKeys.OffsetFor(new[] { Keys.Right }), room));
+ 
+```
+<!-- generated-diff -->
 
 ```csharp
 /*
