@@ -12,4 +12,8 @@
     <Project Path="parts/part-03-dungeon-generation/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
     <Project Path="parts/part-03-dungeon-generation/RogueTutorial/RogueTutorial.csproj" />
   </Folder>
+  <Folder Name="/parts/part-04-field-of-view/">
+    <Project Path="parts/part-04-field-of-view/RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+    <Project Path="parts/part-04-field-of-view/RogueTutorial/RogueTutorial.csproj" />
+  </Folder>
 </Solution>

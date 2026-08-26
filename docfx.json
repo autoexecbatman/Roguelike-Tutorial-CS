@@ -4,7 +4,7 @@
       "src": [
         {
           "files": [
-            "parts/part-03-dungeon-generation/RogueTutorial/RogueTutorial.csproj"
+            "parts/part-04-field-of-view/RogueTutorial/RogueTutorial.csproj"
           ]
         }
       ],

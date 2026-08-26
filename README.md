@@ -57,7 +57,7 @@ unfiltered root run opens one window per part and waits several seconds on each.
 | [1. Drawing and moving the player](docs/part-01-drawing-and-moving.md) | A window, an `@`, and eight-way movement | [code](parts/part-01-drawing-and-moving/) |
 | [2. The entity class and the map](docs/part-02-entities-and-the-map.md) | Walls that stop you, a second character, and a testable picture | [code](parts/part-02-entities-and-the-map/) |
 | [3. Dungeon generation](docs/part-03-dungeon-generation.md) | Random rooms joined by corridors, and how to test randomness | [code](parts/part-03-dungeon-generation/) |
-| 4. Field of view | You only see what the `@` can see | planned |
+| [4. Field of view](docs/part-04-field-of-view.md) | Sight, memory, and why symmetry matters | [code](parts/part-04-field-of-view/) |
 | 5. Placing monsters | Things that occupy space | planned |
 | 6. Combat | Attacking, taking damage, dying | planned |
 | 7. Message log and health bar | Telling the player what happened | planned |

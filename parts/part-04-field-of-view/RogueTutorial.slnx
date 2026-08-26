@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RogueTutorial.Tests/RogueTutorial.Tests.csproj" />
+  <Project Path="RogueTutorial/RogueTutorial.csproj" />
+</Solution>
