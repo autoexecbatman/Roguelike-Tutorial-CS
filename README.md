@@ -7,6 +7,11 @@ way it is rather than only what to type.
 This follows the structure of the r/roguelikedev *Complete Roguelike Tutorial*, which is the
 version most roguelike tutorials now use, ported to C#.
 
+![The finished game: a dungeon floor, a levelled character, and the message log](docs/screenshot.png)
+
+Part 13, on floor three: the map remembered in grey and lit in white, armour on the floor at
+`[`, a health bar, and the log saying what just happened.
+
 ## What you need
 
 - **.NET SDK 9.0 or newer.** Check with `dotnet --version`. Get it from
